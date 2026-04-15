@@ -11,8 +11,7 @@ app.use(express.json());
 // =======================
 // 🔥 EPHE PATH (Render safe)
 // =======================
-const ephePath = path.join(__dirname, 'ephe');
-swisseph.swe_set_ephe_path(ephePath);
+swisseph.swe_set_ephe_path(null);
 
 // =======================
 // 🔵 TEST SERVER
