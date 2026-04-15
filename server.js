@@ -9,11 +9,6 @@ app.use(cors());
 app.use(express.json());
 
 // =======================
-// 🔥 EPHE PATH (Render safe)
-// =======================
-swisseph.swe_set_ephe_path(null);
-
-// =======================
 // 🔵 TEST SERVER
 // =======================
 app.get('/', (req, res) => {
