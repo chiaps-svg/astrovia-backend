@@ -82,10 +82,22 @@ app.post('/tema-natale', (req, res) => {
     const plutone = calcPlanet(jd, swisseph.SE_PLUTO);
 
     // =======================
+    // ⚷ CHIRONE (asteroide)
+    // =======================
+    const chirone = calcPlanet(jd, swisseph.SE_CHIRON);
+
+    // =======================
+    // ⚸ LILITH (Black Moon Mean Apogee)
+    // =======================
+    const lilith = calcPlanet(jd, swisseph.SE_MEAN_APOG);
+
+    // =======================
     // 📡 RESPONSE
     // =======================
     res.json({
-      messaggio: 'Calcolo tema natale OK',
+      messaggio: 'Calcolo tema natale completo',
+
+      // 🌌 pianeti
       sole,
       luna,
       mercurio,
@@ -96,6 +108,11 @@ app.post('/tema-natale', (req, res) => {
       urano,
       nettuno,
       plutone,
+
+      // 🪐 extra astrologici
+      chirone,
+      lilith,
+
       debug: {
         jd,
         lat,
