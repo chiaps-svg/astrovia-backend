@@ -108,7 +108,7 @@ app.post('/tema-natale', (req, res) => {
 // =======================
 // 🚀 START
 // =======================
-const PORT = process.env.PORT || 10000;
+const PORT = process.env.PORT;
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server attivo su porta ${PORT}`);
