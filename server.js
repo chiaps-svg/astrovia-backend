@@ -8,7 +8,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 🔥 IMPORTANTE: path assoluto per Render/Linux
+// =======================
+// 🔥 EPHE PATH (Render safe)
+// =======================
 const ephePath = path.join(__dirname, 'ephe');
 swisseph.swe_set_ephe_path(ephePath);
 
@@ -18,6 +20,19 @@ swisseph.swe_set_ephe_path(ephePath);
 app.get('/', (req, res) => {
   res.send('Backend Astrovia funzionante 🚀');
 });
+
+// =======================
+// 🔧 FUNZIONE SICURA CALCOLO
+// =======================
+function calcPlanet(jd, planet) {
+  const result = swisseph.swe_calc_ut(jd, planet);
+
+  if (!result || result.error) {
+    throw new Error('Errore Swiss Ephemeris');
+  }
+
+  return result.longitude;
+}
 
 // =======================
 // 🔵 TEMA NATALE
@@ -36,6 +51,9 @@ app.post('/tema-natale', (req, res) => {
 
   try {
 
+    // =======================
+    // 🔢 CONVERSIONE DATA
+    // =======================
     const [year, month, day] = data.split('-').map(Number);
     const [hour, minute] = ora.split(':').map(Number);
 
@@ -49,20 +67,35 @@ app.post('/tema-natale', (req, res) => {
       swisseph.SE_GREG_CAL
     );
 
-    // 🔥 CALCOLO SICURO
-    const sun = swisseph.swe_calc_ut(jd, swisseph.SE_SUN);
+    // =======================
+    // 🌌 PIANETI BASE
+    // =======================
+    const sole = calcPlanet(jd, swisseph.SE_SUN);
+    const luna = calcPlanet(jd, swisseph.SE_MOON);
+    const mercurio = calcPlanet(jd, swisseph.SE_MERCURY);
+    const venere = calcPlanet(jd, swisseph.SE_VENUS);
+    const marte = calcPlanet(jd, swisseph.SE_MARS);
+    const giove = calcPlanet(jd, swisseph.SE_JUPITER);
+    const saturno = calcPlanet(jd, swisseph.SE_SATURN);
+    const urano = calcPlanet(jd, swisseph.SE_URANUS);
+    const nettuno = calcPlanet(jd, swisseph.SE_NEPTUNE);
+    const plutone = calcPlanet(jd, swisseph.SE_PLUTO);
 
-    console.log('☀️ SUN RAW:', sun);
-
-    if (!sun) {
-      return res.status(500).json({
-        errore: 'Errore calcolo Swiss Ephemeris'
-      });
-    }
-
+    // =======================
+    // 📡 RESPONSE
+    // =======================
     res.json({
-      messaggio: 'Calcolo OK',
-      sole: sun.longitude ?? null,
+      messaggio: 'Calcolo tema natale OK',
+      sole,
+      luna,
+      mercurio,
+      venere,
+      marte,
+      giove,
+      saturno,
+      urano,
+      nettuno,
+      plutone,
       debug: {
         jd,
         lat,
@@ -75,7 +108,7 @@ app.post('/tema-natale', (req, res) => {
     console.error('❌ SERVER ERROR:', err);
 
     res.status(500).json({
-      errore: err.message
+      errore: err.message || 'Errore interno server'
     });
   }
 });
