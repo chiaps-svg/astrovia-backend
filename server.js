@@ -22,18 +22,25 @@ function calcPlanet(jd, planet) {
   const result = swisseph.swe_calc_ut(
     jd,
     planet,
-    swisseph.SEFLG_SWIEPH
+    swisseph.SEFLG_SWIEPH | swisseph.SEFLG_SPEED
   );
 
-  if (!result || typeof result !== 'object') {
-    throw new Error('Swiss Ephemeris return invalid');
+  if (!result) {
+    throw new Error('Swiss Ephemeris null result');
   }
 
   if (result.error) {
     throw new Error(result.error);
   }
 
-  return result.longitude;
+  // 🔥 compatibilità reale Node binding
+  const lon = result.xx ?? result.longitude;
+
+  if (lon === undefined || lon === null) {
+    throw new Error('Invalid Swiss Ephemeris output');
+  }
+
+  return lon;
 }
 
 // =======================
@@ -74,7 +81,7 @@ app.post('/tema-natale', (req, res) => {
     );
 
     // =======================
-    // 🌌 PIANETI
+    // 🌌 PIANETI PRINCIPALI
     // =======================
     const sole = calcPlanet(jd, swisseph.SE_SUN);
     const luna = calcPlanet(jd, swisseph.SE_MOON);
@@ -125,7 +132,9 @@ app.post('/tema-natale', (req, res) => {
     });
 
   } catch (err) {
+
     console.error('❌ SERVER ERROR:', err);
+
     res.status(500).json({
       errore: err.message || 'Errore interno server'
     });
