@@ -15,7 +15,7 @@ app.get('/', (req, res) => {
 });
 
 // =======================
-// 🔧 SAFE CALC
+// 🔧 SAFE CALC (restituisce solo la longitudine)
 // =======================
 function calcPlanet(jd, planet) {
   try {
@@ -44,6 +44,29 @@ function calcPlanet(jd, planet) {
 }
 
 // =======================
+// 🌟 CONVERTE LONGITUDINE IN SEGNO + GRADO
+// =======================
+function getPlanetData(jd, planet) {
+  const long = calcPlanet(jd, planet);
+  if (long === null) return null;
+  
+  const segni = [
+    'Ariete ♈', 'Toro ♉', 'Gemelli ♊', 'Cancro ♋',
+    'Leone ♌', 'Vergine ♍', 'Bilancia ♎', 'Scorpione ♏',
+    'Sagittario ♐', 'Capricorno ♑', 'Acquario ♒', 'Pesci ♓'
+  ];
+  
+  const indiceSegno = Math.floor(long / 30);
+  const gradoNelSegno = (long % 30).toFixed(2);
+  
+  return {
+    longitudine: long,
+    segno: segni[indiceSegno],
+    grado: gradoNelSegno
+  };
+}
+
+// =======================
 // 🌌 API
 // =======================
 app.post('/tema-natale', (req, res) => {
@@ -66,29 +89,26 @@ app.post('/tema-natale', (req, res) => {
       swisseph.SE_GREG_CAL
     );
 
-    const flags = swisseph.SEFLG_SWIEPH | swisseph.SEFLG_SPEED;
-
     // =======================
-    // 🌟 PIANETI
+    // 🌟 PIANETI (con segno e grado)
     // =======================
     const pianeti = {
-      sole: calcPlanet(jd, swisseph.SE_SUN),
-      luna: calcPlanet(jd, swisseph.SE_MOON),
-      mercurio: calcPlanet(jd, swisseph.SE_MERCURY),
-      venere: calcPlanet(jd, swisseph.SE_VENUS),
-      marte: calcPlanet(jd, swisseph.SE_MARS),
-      giove: calcPlanet(jd, swisseph.SE_JUPITER),
-      saturno: calcPlanet(jd, swisseph.SE_SATURN),
-      urano: calcPlanet(jd, swisseph.SE_URANUS),
-      nettuno: calcPlanet(jd, swisseph.SE_NEPTUNE),
-      plutone: calcPlanet(jd, swisseph.SE_PLUTO),
-
-      chirone: calcPlanet(jd, swisseph.SE_CHIRON || null),
-      lilith: calcPlanet(jd, swisseph.SE_MEAN_APOG || null)
+      sole: getPlanetData(jd, swisseph.SE_SUN),
+      luna: getPlanetData(jd, swisseph.SE_MOON),
+      mercurio: getPlanetData(jd, swisseph.SE_MERCURY),
+      venere: getPlanetData(jd, swisseph.SE_VENUS),
+      marte: getPlanetData(jd, swisseph.SE_MARS),
+      giove: getPlanetData(jd, swisseph.SE_JUPITER),
+      saturno: getPlanetData(jd, swisseph.SE_SATURN),
+      urano: getPlanetData(jd, swisseph.SE_URANUS),
+      nettuno: getPlanetData(jd, swisseph.SE_NEPTUNE),
+      plutone: getPlanetData(jd, swisseph.SE_PLUTO),
+      chirone: getPlanetData(jd, swisseph.SE_CHIRON),
+      lilith: getPlanetData(jd, swisseph.SE_MEAN_APOG)
     };
 
     // =======================
-    // 📡 OUTPUT COMPATIBILE FRONTEND
+    // 📡 OUTPUT
     // =======================
     res.json({
       jd,
@@ -108,7 +128,7 @@ app.post('/tema-natale', (req, res) => {
 // =======================
 // 🚀 START
 // =======================
-const PORT = process.env.PORT;
+const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server attivo su porta ${PORT}`);
