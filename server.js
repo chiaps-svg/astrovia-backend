@@ -252,6 +252,22 @@ app.post('/tema-natale', (req, res) => {
       return res.status(400).json({ errore: 'Dati mancanti' });
     }
 
+    // 🔥 CORREZIONE: usa SOLO i valori inviati dal frontend
+    if (!lat || !lon) {
+      console.log(`❌ ERRORE: lat o lon mancanti!`);
+      return res.status(400).json({ errore: 'Latitudine e longitudine richieste' });
+    }
+
+    const latitudine = parseFloat(lat);
+    const longitudine = parseFloat(lon);
+
+    if (isNaN(latitudine) || isNaN(longitudine)) {
+      console.log(`❌ ERRORE: lat o lon non validi: lat=${lat}, lon=${lon}`);
+      return res.status(400).json({ errore: 'Latitudine o longitudine non valide' });
+    }
+    
+    console.log(`📍 Calcolo con lat=${latitudine}, lon=${longitudine}`);
+
     const [y, m, d] = data.split('-').map(Number);
     const [h, min] = ora.split(':').map(Number);
     const ut = h + min / 60;
@@ -264,31 +280,24 @@ app.post('/tema-natale', (req, res) => {
     // 🌟 PIANETI
     // =======================
     const pianeti = {
-      sole: getPlanetData(jd, swisseph.SE_SUN),        // ID 0
-      luna: getPlanetData(jd, swisseph.SE_MOON),       // ID 1
-      mercurio: getPlanetData(jd, swisseph.SE_MERCURY), // ID 2
-      venere: getPlanetData(jd, swisseph.SE_VENUS),    // ID 3
-      marte: getPlanetData(jd, swisseph.SE_MARS),      // ID 4
-      giove: getPlanetData(jd, swisseph.SE_JUPITER),   // ID 5
-      saturno: getPlanetData(jd, swisseph.SE_SATURN),  // ID 6
-      urano: getPlanetData(jd, swisseph.SE_URANUS),    // ID 7
-      nettuno: getPlanetData(jd, swisseph.SE_NEPTUNE), // ID 8
-      plutone: getPlanetData(jd, swisseph.SE_PLUTO),   // ID 9
-      chirone: getPlanetData(jd, swisseph.SE_CHIRON),  // ID 15
-      lilith: getPlanetData(jd, swisseph.SE_MEAN_APOG) // ID 12
+      sole: getPlanetData(jd, swisseph.SE_SUN),
+      luna: getPlanetData(jd, swisseph.SE_MOON),
+      mercurio: getPlanetData(jd, swisseph.SE_MERCURY),
+      venere: getPlanetData(jd, swisseph.SE_VENUS),
+      marte: getPlanetData(jd, swisseph.SE_MARS),
+      giove: getPlanetData(jd, swisseph.SE_JUPITER),
+      saturno: getPlanetData(jd, swisseph.SE_SATURN),
+      urano: getPlanetData(jd, swisseph.SE_URANUS),
+      nettuno: getPlanetData(jd, swisseph.SE_NEPTUNE),
+      plutone: getPlanetData(jd, swisseph.SE_PLUTO),
+      chirone: getPlanetData(jd, swisseph.SE_CHIRON),
+      lilith: getPlanetData(jd, swisseph.SE_MEAN_APOG)
     };
 
     // =======================
-    // 🏠 CASE ASTROLOGICHE con AC, MC, DC, FC
+    // 🏠 CASE ASTROLOGICHE
     // =======================
-    let caseAstrologiche = null;
-    if (lat && lon) {
-      const latNum = parseFloat(lat);
-      const lonNum = parseFloat(lon);
-      if (!isNaN(latNum) && !isNaN(lonNum)) {
-        caseAstrologiche = calcolaCase(jd, latNum, lonNum);
-      }
-    }
+    const caseAstrologiche = calcolaCase(jd, latitudine, longitudine);
 
     // =======================
     // 🔗 ASPETTI PLANETARI
