@@ -109,36 +109,20 @@ function getPlanetData(jd, planet) {
 }
 
 // =======================
-// 🏠 CALCOLO CASE ASTROLOGICHE (Placido) con AC, MC, DC, FC
+// 🏠 CALCOLO CASE ASTROLOGICHE (versione corretta con swe_houses)
 // =======================
 function calcolaCase(jd, lat, lon) {
   try {
-    // Metodo Placido (sistema delle case più comune)
-    const cuspidi = [];
+    // Usa swe_houses che restituisce tutte le cuspidi in una volta
+    const caseData = swisseph.swe_houses(jd, lat, lon, 'P');
     
-    for (let casa = 1; casa <= 12; casa++) {
-      // Calcola la cuspide per ogni casa
-      const cuspide = swisseph.swe_house_pos(jd, casa, lat, lon, 'P');
-      if (cuspide !== undefined && cuspide !== null) {
-        cuspidi.push(cuspide);
-      } else {
-        cuspidi.push(0);
-      }
+    if (!caseData || !caseData.cusps) {
+      console.log('❌ swe_houses non ha restituito cuspidi');
+      return null;
     }
     
-    // Calcola Ascendente (cuspide della prima casa)
-    const ascendenteLong = cuspidi[0];
+    const cuspidi = caseData.cusps;
     
-    // Calcola Medio Cielo (cuspide della decima casa)
-    const medioCieloLong = cuspidi[9];
-    
-    // Calcola Discendente (cuspide della settima casa - opposto all'Ascendente)
-    const discendenteLong = (ascendenteLong + 180) % 360;
-    
-    // Calcola Fondo Cielo (cuspide della quarta casa - opposto al MC)
-    const fondoCieloLong = (medioCieloLong + 180) % 360;
-    
-    // Funzione per convertire longitudine in segno + grado
     const segni = [
       'Ariete ♈', 'Toro ♉', 'Gemelli ♊', 'Cancro ♋',
       'Leone ♌', 'Vergine ♍', 'Bilancia ♎', 'Scorpione ♏',
@@ -154,6 +138,11 @@ function calcolaCase(jd, lat, lon) {
         grado: grado
       };
     }
+    
+    const ascendenteLong = cuspidi[0];
+    const medioCieloLong = cuspidi[9];
+    const discendenteLong = (ascendenteLong + 180) % 360;
+    const fondoCieloLong = (medioCieloLong + 180) % 360;
     
     return {
       ascendente: getSegnoGrado(ascendenteLong),
