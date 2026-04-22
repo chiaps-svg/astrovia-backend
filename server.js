@@ -51,23 +51,34 @@ function calcPlanet(jd, planet) {
 
     if (!planet) return null;
 
+    console.log(`🪐 Calcolo pianeta ID: ${planet} per JD: ${jd}`);
+
     const result = swisseph.swe_calc_ut(
       jd,
       planet,
       swisseph.SEFLG_SWIEPH | swisseph.SEFLG_SPEED
     );
 
-    if (!result) return null;
+    console.log(`📊 Risultato grezzo per ID ${planet}:`, JSON.stringify(result));
+
+    if (!result) {
+      console.log(`❌ Nessun risultato per pianeta ${planet}`);
+      return null;
+    }
 
     // Node binding compatibility
     const data = Array.isArray(result) ? result : result.xx;
 
-    if (!data || data.length === 0) return null;
+    if (!data || data.length === 0) {
+      console.log(`❌ Nessun dato per pianeta ${planet}`);
+      return null;
+    }
 
+    console.log(`✅ Longitudine per pianeta ${planet}: ${data[0]}`);
     return data[0];
 
   } catch (e) {
-    console.error('Planet calc error:', e.message);
+    console.error(`❌ Planet calc error per ID ${planet}:`, e.message);
     return null;
   }
 }
@@ -76,8 +87,12 @@ function calcPlanet(jd, planet) {
 // 🌟 CONVERTE LONGITUDINE IN SEGNO + GRADO
 // =======================
 function getPlanetData(jd, planet) {
+  console.log(`🔍 getPlanetData chiamato per planet ID: ${planet}`);
   const long = calcPlanet(jd, planet);
-  if (long === null) return null;
+  if (long === null) {
+    console.log(`❌ getPlanetData: long è null per ID ${planet}`);
+    return null;
+  }
   
   const segni = [
     'Ariete ♈', 'Toro ♉', 'Gemelli ♊', 'Cancro ♋',
@@ -88,11 +103,14 @@ function getPlanetData(jd, planet) {
   const indiceSegno = Math.floor(long / 30);
   const gradoNelSegno = (long % 30).toFixed(2);
   
-  return {
+  const risultato = {
     longitudine: long,
     segno: segni[indiceSegno],
     grado: gradoNelSegno
   };
+  
+  console.log(`✅ getPlanetData risultato per ID ${planet}:`, risultato);
+  return risultato;
 }
 
 // =======================
@@ -104,6 +122,8 @@ app.post('/tema-natale', (req, res) => {
 
     const { data, ora } = req.body;
 
+    console.log(`📥 Ricevuta richiesta: data=${data}, ora=${ora}`);
+
     if (!data || !ora) {
       return res.status(400).json({ errore: 'Dati mancanti' });
     }
@@ -113,10 +133,14 @@ app.post('/tema-natale', (req, res) => {
 
     const ut = h + min / 60;
 
+    console.log(`📅 Data convertita: y=${y}, m=${m}, d=${d}, ut=${ut}`);
+
     const jd = swisseph.swe_julday(
       y, m, d, ut,
       swisseph.SE_GREG_CAL
     );
+
+    console.log(`📆 Julian Day calcolato: ${jd}`);
 
     // =======================
     // 🌟 PIANETI (con segno e grado)
@@ -135,6 +159,8 @@ app.post('/tema-natale', (req, res) => {
       chirone: getPlanetData(jd, swisseph.SE_CHIRON),
       lilith: getPlanetData(jd, swisseph.SE_MEAN_APOG)
     };
+
+    console.log(`📤 Risultato finale pianeti:`, JSON.stringify(pianeti));
 
     // =======================
     // 📡 OUTPUT
