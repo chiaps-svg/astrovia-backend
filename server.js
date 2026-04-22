@@ -44,7 +44,7 @@ app.get('/', (req, res) => {
 });
 
 // =======================
-// 🔧 SAFE CALC (restituisce solo la longitudine)
+// 🔧 SAFE CALC (CORRETTO - usa result.longitude)
 // =======================
 function calcPlanet(jd, planet) {
   try {
@@ -66,16 +66,16 @@ function calcPlanet(jd, planet) {
       return null;
     }
 
-    // Node binding compatibility
-    const data = Array.isArray(result) ? result : result.xx;
+    // CORREZIONE: la libreria restituisce un oggetto con proprietà 'longitude'
+    const longitudine = result.longitude;
 
-    if (!data || data.length === 0) {
-      console.log(`❌ Nessun dato per pianeta ${planet}`);
+    if (longitudine === undefined || longitudine === null) {
+      console.log(`❌ Nessuna longitudine per pianeta ${planet}`);
       return null;
     }
 
-    console.log(`✅ Longitudine per pianeta ${planet}: ${data[0]}`);
-    return data[0];
+    console.log(`✅ Longitudine per pianeta ${planet}: ${longitudine}`);
+    return longitudine;
 
   } catch (e) {
     console.error(`❌ Planet calc error per ID ${planet}:`, e.message);
