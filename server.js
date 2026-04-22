@@ -1,6 +1,35 @@
 const express = require('express');
 const cors = require('cors');
 const swisseph = require('swisseph');
+const fs = require('fs');
+
+// =======================
+// 🔍 DEBUG - Controllo cartella ephe
+// =======================
+console.log('🔍 DIRECTORY CORRENTE:', __dirname);
+console.log('🔍 La cartella ./ephe esiste?', fs.existsSync('./ephe'));
+
+if (fs.existsSync('./ephe')) {
+  console.log('🔍 Contenuto di ./ephe:', fs.readdirSync('./ephe'));
+} else {
+  console.log('🔍 Cartella ./ephe NON TROVATA!');
+  console.log('🔍 Provo a cercare in /app/ephe...');
+  console.log('🔍 /app/ephe esiste?', fs.existsSync('/app/ephe'));
+  if (fs.existsSync('/app/ephe')) {
+    console.log('🔍 Contenuto di /app/ephe:', fs.readdirSync('/app/ephe'));
+  }
+}
+
+// Imposta il percorso dei file ephemeris (prova entrambi)
+if (fs.existsSync('./ephe')) {
+  swisseph.swe_set_ephe_path('./ephe');
+  console.log('✅ Percorso impostato su ./ephe');
+} else if (fs.existsSync('/app/ephe')) {
+  swisseph.swe_set_ephe_path('/app/ephe');
+  console.log('✅ Percorso impostato su /app/ephe');
+} else {
+  console.log('❌ NESSUN PERCORSO TROVATO!');
+}
 
 const app = express();
 
