@@ -109,52 +109,40 @@ function getPlanetData(jd, planet) {
 }
 
 // =======================
-// 🏠 CALCOLO CASE ASTROLOGICHE (versione migliorata con fallback)
+// 🏠 CALCOLO CASE ASTROLOGICHE (versione corretta - usa 'house')
 // =======================
 function calcolaCase(jd, lat, lon) {
   try {
     console.log(`🏠 Calcolo case con jd=${jd}, lat=${lat}, lon=${lon}`);
     
-    let cuspidi = null;
-    
-    // Metodo 1: swe_houses
-    if (typeof swisseph.swe_houses === 'function') {
-      try {
-        const result = swisseph.swe_houses(jd, lat, lon, 'P');
-        console.log(`📊 swe_houses result type: ${typeof result}, keys: ${result ? Object.keys(result) : 'null'}`);
-        
-        if (result && result.cusps && Array.isArray(result.cusps)) {
-          cuspidi = result.cusps;
-        } else if (result && result.houses && Array.isArray(result.houses)) {
-          cuspidi = result.houses;
-        } else if (Array.isArray(result) && result.length >= 12) {
-          cuspidi = result;
-        }
-      } catch(e) {
-        console.log(`❌ swe_houses error:`, e.message);
-      }
-    }
-    
-    // Metodo 2: swe_house_pos (fallback)
-    if (!cuspidi && typeof swisseph.swe_house_pos === 'function') {
-      console.log(`📊 Usando swe_house_pos come fallback`);
-      cuspidi = [];
-      for (let casa = 1; casa <= 12; casa++) {
-        try {
-          const cuspide = swisseph.swe_house_pos(jd, casa, lat, lon, 'P');
-          cuspidi.push((cuspide !== undefined && cuspide !== null) ? cuspide : 0);
-        } catch(e) {
-          cuspidi.push(0);
-        }
-      }
-    }
-    
-    if (!cuspidi || cuspidi.length < 12) {
-      console.log(`❌ Impossibile calcolare le case`);
+    if (typeof swisseph.swe_houses !== 'function') {
+      console.log(`❌ swe_houses non è una funzione`);
       return null;
     }
     
-    console.log(`✅ Cuspidi calcolate: [${cuspidi.map(c => c.toFixed(2)).join(', ')}]`);
+    const result = swisseph.swe_houses(jd, lat, lon, 'P');
+    console.log(`📊 swe_houses result keys:`, Object.keys(result));
+    
+    // La proprietà corretta è 'house' (singolare)
+    let cuspidi = null;
+    
+    if (result.house && Array.isArray(result.house)) {
+      cuspidi = result.house;
+      console.log(`✅ Trovato result.house con ${cuspidi.length} elementi`);
+    } else if (result.cusps && Array.isArray(result.cusps)) {
+      cuspidi = result.cusps;
+      console.log(`✅ Trovato result.cusps con ${cuspidi.length} elementi`);
+    } else if (result.houses && Array.isArray(result.houses)) {
+      cuspidi = result.houses;
+      console.log(`✅ Trovato result.houses con ${cuspidi.length} elementi`);
+    }
+    
+    if (!cuspidi || cuspidi.length < 12) {
+      console.log(`❌ Impossibile trovare le cuspidi`);
+      return null;
+    }
+    
+    console.log(`✅ Cuspidi calcolate: [${cuspidi.slice(0, 6).map(c => c.toFixed(2)).join(', ')}...]`);
     
     const segni = [
       'Ariete ♈', 'Toro ♉', 'Gemelli ♊', 'Cancro ♋',
