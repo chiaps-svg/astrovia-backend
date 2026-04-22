@@ -109,14 +109,112 @@ function getPlanetData(jd, planet) {
 }
 
 // =======================
+// 🏠 CALCOLO CASE ASTROLOGICHE (Placido)
+// =======================
+function calcolaCase(jd, lat, lon) {
+  try {
+    // Metodo Placido (sistema delle case più comune)
+    const cuspidi = [];
+    
+    for (let casa = 1; casa <= 12; casa++) {
+      // Calcola la cuspide per ogni casa
+      const cuspide = swisseph.swe_house_pos(jd, casa, lat, lon, 'P');
+      if (cuspide !== undefined && cuspide !== null) {
+        cuspidi.push(cuspide);
+      } else {
+        cuspidi.push(0);
+      }
+    }
+    
+    return {
+      ascendente: cuspidi[0],
+      cuspidi: cuspidi,
+      sistema: 'Placido'
+    };
+  } catch (e) {
+    console.error('Errore calcolo case:', e.message);
+    return null;
+  }
+}
+
+// =======================
+// 🔗 CALCOLO ASPETTI PLANETARI
+// =======================
+function calcolaAspetti(pianeti) {
+  const aspetti = [];
+  
+  // Lista degli aspetti da cercare
+  const aspettiLista = [
+    { nome: 'Congiunzione', angolo: 0, orb: 8, colore: '#ffffff' },
+    { nome: 'Sestile', angolo: 60, orb: 6, colore: '#66ff66' },
+    { nome: 'Quadrato', angolo: 90, orb: 8, colore: '#ff6666' },
+    { nome: 'Trigono', angolo: 120, orb: 8, colore: '#6666ff' },
+    { nome: 'Opposizione', angolo: 180, orb: 8, colore: '#ff3366' }
+  ];
+  
+  // Lista dei pianeti con i loro nomi
+  const pianetiLista = [
+    { nome: 'sole' },
+    { nome: 'luna' },
+    { nome: 'mercurio' },
+    { nome: 'venere' },
+    { nome: 'marte' },
+    { nome: 'giove' },
+    { nome: 'saturno' },
+    { nome: 'urano' },
+    { nome: 'nettuno' },
+    { nome: 'plutone' },
+    { nome: 'chirone' },
+    { nome: 'lilith' }
+  ];
+  
+  // Per ogni coppia di pianeti
+  for (let i = 0; i < pianetiLista.length; i++) {
+    for (let j = i + 1; j < pianetiLista.length; j++) {
+      const p1 = pianetiLista[i];
+      const p2 = pianetiLista[j];
+      
+      const p1Data = pianeti[p1.nome];
+      const p2Data = pianeti[p2.nome];
+      
+      if (!p1Data || !p2Data) continue;
+      
+      const long1 = p1Data.longitudine;
+      const long2 = p2Data.longitudine;
+      
+      // Calcola la differenza angolare
+      let diff = Math.abs(long1 - long2);
+      if (diff > 180) diff = 360 - diff;
+      
+      // Controlla ogni tipo di aspetto
+      for (const aspetto of aspettiLista) {
+        let diffAspetto = Math.abs(diff - aspetto.angolo);
+        if (diffAspetto <= aspetto.orb) {
+          aspetti.push({
+            pianeta1: p1.nome,
+            pianeta2: p2.nome,
+            aspetto: aspetto.nome,
+            angolo: aspetto.angolo,
+            orb: diffAspetto.toFixed(2),
+            colore: aspetto.colore
+          });
+        }
+      }
+    }
+  }
+  
+  return aspetti;
+}
+
+// =======================
 // 🌌 API
 // =======================
 app.post('/tema-natale', (req, res) => {
 
   try {
-    const { data, ora } = req.body;
+    const { data, ora, lat, lon } = req.body;
 
-    console.log(`📥 Ricevuta richiesta: data=${data}, ora=${ora}`);
+    console.log(`📥 Ricevuta richiesta: data=${data}, ora=${ora}, lat=${lat}, lon=${lon}`);
 
     if (!data || !ora) {
       return res.status(400).json({ errore: 'Dati mancanti' });
@@ -148,7 +246,29 @@ app.post('/tema-natale', (req, res) => {
       lilith: getPlanetData(jd, swisseph.SE_MEAN_APOG) // ID 12
     };
 
-    res.json({ jd, pianeti });
+    // =======================
+    // 🏠 CASE ASTROLOGICHE
+    // =======================
+    let caseAstrologiche = null;
+    if (lat && lon) {
+      const latNum = parseFloat(lat);
+      const lonNum = parseFloat(lon);
+      if (!isNaN(latNum) && !isNaN(lonNum)) {
+        caseAstrologiche = calcolaCase(jd, latNum, lonNum);
+      }
+    }
+
+    // =======================
+    // 🔗 ASPETTI PLANETARI
+    // =======================
+    const aspetti = calcolaAspetti(pianeti);
+
+    res.json({ 
+      jd, 
+      pianeti,
+      case: caseAstrologiche,
+      aspetti: aspetti
+    });
 
   } catch (err) {
     console.error('❌ ERROR:', err);
