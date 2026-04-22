@@ -180,6 +180,50 @@ function calcolaCase(jd, lat, lon) {
 }
 
 // =======================
+// 🌙 CALCOLO NODI LUNARI
+// =======================
+function calcolaNodiLunari(jd) {
+  try {
+    // Nodo Nord (vero) - ID 11 in Swiss Ephemeris
+    const nodoNordResult = swisseph.swe_calc_ut(jd, 11, swisseph.SEFLG_SWIEPH);
+    
+    // Nodo Sud è l'opposto del Nodo Nord
+    let nodoNordLong = null;
+    let nodoSudLong = null;
+    
+    if (nodoNordResult && nodoNordResult.longitude !== undefined) {
+      nodoNordLong = nodoNordResult.longitude;
+      nodoSudLong = (nodoNordLong + 180) % 360;
+    }
+    
+    const segni = [
+      'Ariete ♈', 'Toro ♉', 'Gemelli ♊', 'Cancro ♋',
+      'Leone ♌', 'Vergine ♍', 'Bilancia ♎', 'Scorpione ♏',
+      'Sagittario ♐', 'Capricorno ♑', 'Acquario ♒', 'Pesci ♓'
+    ];
+    
+    function getSegnoGrado(long) {
+      if (long === null) return null;
+      const indiceSegno = Math.floor(long / 30);
+      const grado = (long % 30).toFixed(2);
+      return {
+        longitudine: long,
+        segno: segni[indiceSegno],
+        grado: grado
+      };
+    }
+    
+    return {
+      nodoNord: getSegnoGrado(nodoNordLong),
+      nodoSud: getSegnoGrado(nodoSudLong)
+    };
+  } catch (e) {
+    console.error('Errore calcolo Nodi Lunari:', e.message);
+    return null;
+  }
+}
+
+// =======================
 // 🔗 CALCOLO ASPETTI PLANETARI
 // =======================
 function calcolaAspetti(pianeti) {
@@ -314,11 +358,17 @@ app.post('/tema-natale', (req, res) => {
     // =======================
     const aspetti = calcolaAspetti(pianeti);
 
+    // =======================
+    // 🌙 NODI LUNARI
+    // =======================
+    const nodiLunari = calcolaNodiLunari(jd);
+
     res.json({ 
       jd, 
       pianeti,
       case: caseAstrologiche,
-      aspetti: aspetti
+      aspetti: aspetti,
+      nodi: nodiLunari
     });
 
   } catch (err) {
