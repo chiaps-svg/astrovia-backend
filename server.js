@@ -109,19 +109,52 @@ function getPlanetData(jd, planet) {
 }
 
 // =======================
-// 🏠 CALCOLO CASE ASTROLOGICHE (versione corretta con swe_houses)
+// 🏠 CALCOLO CASE ASTROLOGICHE (versione migliorata con fallback)
 // =======================
 function calcolaCase(jd, lat, lon) {
   try {
-    // Usa swe_houses che restituisce tutte le cuspidi in una volta
-    const caseData = swisseph.swe_houses(jd, lat, lon, 'P');
+    console.log(`🏠 Calcolo case con jd=${jd}, lat=${lat}, lon=${lon}`);
     
-    if (!caseData || !caseData.cusps) {
-      console.log('❌ swe_houses non ha restituito cuspidi');
+    let cuspidi = null;
+    
+    // Metodo 1: swe_houses
+    if (typeof swisseph.swe_houses === 'function') {
+      try {
+        const result = swisseph.swe_houses(jd, lat, lon, 'P');
+        console.log(`📊 swe_houses result type: ${typeof result}, keys: ${result ? Object.keys(result) : 'null'}`);
+        
+        if (result && result.cusps && Array.isArray(result.cusps)) {
+          cuspidi = result.cusps;
+        } else if (result && result.houses && Array.isArray(result.houses)) {
+          cuspidi = result.houses;
+        } else if (Array.isArray(result) && result.length >= 12) {
+          cuspidi = result;
+        }
+      } catch(e) {
+        console.log(`❌ swe_houses error:`, e.message);
+      }
+    }
+    
+    // Metodo 2: swe_house_pos (fallback)
+    if (!cuspidi && typeof swisseph.swe_house_pos === 'function') {
+      console.log(`📊 Usando swe_house_pos come fallback`);
+      cuspidi = [];
+      for (let casa = 1; casa <= 12; casa++) {
+        try {
+          const cuspide = swisseph.swe_house_pos(jd, casa, lat, lon, 'P');
+          cuspidi.push((cuspide !== undefined && cuspide !== null) ? cuspide : 0);
+        } catch(e) {
+          cuspidi.push(0);
+        }
+      }
+    }
+    
+    if (!cuspidi || cuspidi.length < 12) {
+      console.log(`❌ Impossibile calcolare le case`);
       return null;
     }
     
-    const cuspidi = caseData.cusps;
+    console.log(`✅ Cuspidi calcolate: [${cuspidi.map(c => c.toFixed(2)).join(', ')}]`);
     
     const segni = [
       'Ariete ♈', 'Toro ♉', 'Gemelli ♊', 'Cancro ♋',
