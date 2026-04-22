@@ -109,7 +109,7 @@ function getPlanetData(jd, planet) {
 }
 
 // =======================
-// 🏠 CALCOLO CASE ASTROLOGICHE (Placido)
+// 🏠 CALCOLO CASE ASTROLOGICHE (Placido) con AC, MC, DC, FC
 // =======================
 function calcolaCase(jd, lat, lon) {
   try {
@@ -126,8 +126,40 @@ function calcolaCase(jd, lat, lon) {
       }
     }
     
+    // Calcola Ascendente (cuspide della prima casa)
+    const ascendenteLong = cuspidi[0];
+    
+    // Calcola Medio Cielo (cuspide della decima casa)
+    const medioCieloLong = cuspidi[9];
+    
+    // Calcola Discendente (cuspide della settima casa - opposto all'Ascendente)
+    const discendenteLong = (ascendenteLong + 180) % 360;
+    
+    // Calcola Fondo Cielo (cuspide della quarta casa - opposto al MC)
+    const fondoCieloLong = (medioCieloLong + 180) % 360;
+    
+    // Funzione per convertire longitudine in segno + grado
+    const segni = [
+      'Ariete ♈', 'Toro ♉', 'Gemelli ♊', 'Cancro ♋',
+      'Leone ♌', 'Vergine ♍', 'Bilancia ♎', 'Scorpione ♏',
+      'Sagittario ♐', 'Capricorno ♑', 'Acquario ♒', 'Pesci ♓'
+    ];
+    
+    function getSegnoGrado(long) {
+      const indiceSegno = Math.floor(long / 30);
+      const grado = (long % 30).toFixed(2);
+      return {
+        longitudine: long,
+        segno: segni[indiceSegno],
+        grado: grado
+      };
+    }
+    
     return {
-      ascendente: cuspidi[0],
+      ascendente: getSegnoGrado(ascendenteLong),
+      medioCielo: getSegnoGrado(medioCieloLong),
+      discendente: getSegnoGrado(discendenteLong),
+      fondoCielo: getSegnoGrado(fondoCieloLong),
       cuspidi: cuspidi,
       sistema: 'Placido'
     };
@@ -247,7 +279,7 @@ app.post('/tema-natale', (req, res) => {
     };
 
     // =======================
-    // 🏠 CASE ASTROLOGICHE
+    // 🏠 CASE ASTROLOGICHE con AC, MC, DC, FC
     // =======================
     let caseAstrologiche = null;
     if (lat && lon) {
