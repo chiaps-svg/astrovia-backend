@@ -109,7 +109,7 @@ function getPlanetData(jd, planet) {
 }
 
 // =======================
-// 🏠 CALCOLO CASE ASTROLOGICHE (versione corretta - usa 'house')
+// 🏠 CALCOLO CASE ASTROLOGICHE (versione CORRETTA - usa result.asc e result.mc)
 // =======================
 function calcolaCase(jd, lat, lon) {
   try {
@@ -123,9 +123,8 @@ function calcolaCase(jd, lat, lon) {
     const result = swisseph.swe_houses(jd, lat, lon, 'P');
     console.log(`📊 swe_houses result keys:`, Object.keys(result));
     
-    // La proprietà corretta è 'house' (singolare)
+    // Ottieni le cuspidi delle case
     let cuspidi = null;
-    
     if (result.house && Array.isArray(result.house)) {
       cuspidi = result.house;
       console.log(`✅ Trovato result.house con ${cuspidi.length} elementi`);
@@ -142,7 +141,31 @@ function calcolaCase(jd, lat, lon) {
       return null;
     }
     
-    console.log(`✅ Cuspidi calcolate: [${cuspidi.slice(0, 6).map(c => c.toFixed(2)).join(', ')}...]`);
+    // 🔥 CORREZIONE: usa result.asc e result.mc invece di cuspidi[0] e cuspidi[9]
+    let ascendenteLong = null;
+    let medioCieloLong = null;
+    
+    if (result.asc !== undefined && result.asc !== null) {
+      ascendenteLong = result.asc;
+      console.log(`✅ Ascendente da result.asc: ${ascendenteLong}`);
+    } else if (cuspidi[0] !== undefined) {
+      ascendenteLong = cuspidi[0];
+      console.log(`⚠️ Fallback: Ascendente da cuspidi[0]: ${ascendenteLong}`);
+    }
+    
+    if (result.mc !== undefined && result.mc !== null) {
+      medioCieloLong = result.mc;
+      console.log(`✅ Medio Cielo da result.mc: ${medioCieloLong}`);
+    } else if (cuspidi[9] !== undefined) {
+      medioCieloLong = cuspidi[9];
+      console.log(`⚠️ Fallback: Medio Cielo da cuspidi[9]: ${medioCieloLong}`);
+    }
+    
+    // Calcola Discendente e Fondo Cielo come opposti
+    const discendenteLong = (ascendenteLong + 180) % 360;
+    const fondoCieloLong = (medioCieloLong + 180) % 360;
+    
+    console.log(`📊 AC: ${ascendenteLong}, MC: ${medioCieloLong}, DC: ${discendenteLong}, FC: ${fondoCieloLong}`);
     
     const segni = [
       'Ariete ♈', 'Toro ♉', 'Gemelli ♊', 'Cancro ♋',
@@ -151,6 +174,7 @@ function calcolaCase(jd, lat, lon) {
     ];
     
     function getSegnoGrado(long) {
+      if (long === null) return null;
       const indiceSegno = Math.floor(long / 30);
       const grado = (long % 30).toFixed(2);
       return {
@@ -159,11 +183,6 @@ function calcolaCase(jd, lat, lon) {
         grado: grado
       };
     }
-    
-    const ascendenteLong = cuspidi[0];
-    const medioCieloLong = cuspidi[9];
-    const discendenteLong = (ascendenteLong + 180) % 360;
-    const fondoCieloLong = (medioCieloLong + 180) % 360;
     
     return {
       ascendente: getSegnoGrado(ascendenteLong),
