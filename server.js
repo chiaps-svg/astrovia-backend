@@ -2,9 +2,6 @@ const express = require('express');
 const swisseph = require('swisseph');
 const fs = require('fs');
 
-// =======================
-// 🔍 DEBUG - Controllo cartella ephe
-// =======================
 console.log('🔍 DIRECTORY CORRENTE:', __dirname);
 console.log('🔍 La cartella ./ephe esiste?', fs.existsSync('./ephe'));
 
@@ -18,9 +15,6 @@ if (fs.existsSync('./ephe')) {
 
 const app = express();
 
-// =======================
-// 🔥 CORS
-// =======================
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -33,9 +27,6 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
-// =======================
-// 🔵 TEST
-// =======================
 app.get('/', (req, res) => res.send('Backend Astrovia funzionante 🚀'));
 app.get('/ping', (req, res) => res.send('OK'));
 
@@ -94,7 +85,7 @@ function calcolaAspetti(pianeti) {
 }
 
 // =======================
-// 🌌 API - CONVERSIONE FUSO ORARIO UFFICIALE E PRECISA
+// 🌌 API - CON GESTIONE FUSO ORARIO
 // =======================
 app.post('/tema-natale', (req, res) => {
   console.log('\n🔥 RICHIESTA RICEVUTA');
@@ -108,33 +99,49 @@ app.post('/tema-natale', (req, res) => {
     }
 
     // =======================
-    // 🔥 CONVERSIONE FUSO ORARIO - METODO UFFICIALE SWISSEPH
+    // 🔥 CONVERSIONE FUSO ORARIO ITALIA (CET = UTC+1)
+    // L'ora inserita è italiana, dobbiamo sottrarre 1 ora per ottenere UT
     // =======================
     const [y, m, d] = data.split('-').map(Number);
     let [h, min] = ora.split(':').map(Number);
-    let sec = 0;
     
-    // Per l'Italia: CET = UTC+1 (sempre per le date del 1967)
-    const timezone = 1;
+    // Sottrai 1 ora per l'Italia (CET)
+    let oraUt = h + min / 60 - 1;
+    let giornoJD = d;
+    let meseJD = m;
+    let annoJD = y;
     
-    // Usa la funzione ufficiale della libreria
-    const utc = swisseph.swe_utc_time_zone(y, m, d, h, min, sec, timezone);
+    // Gestisci il cambio di giorno
+    if (oraUt < 0) {
+      oraUt += 24;
+      giornoJD--;
+      
+      if (giornoJD < 1) {
+        const giorniMese = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+        const isLeap = (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
+        if (isLeap) giorniMese[1] = 29;
+        
+        meseJD--;
+        if (meseJD < 1) {
+          meseJD = 12;
+          annoJD--;
+        }
+        giornoJD = giorniMese[meseJD - 1];
+      }
+    }
     
-    console.log(`📅 Ora italiana: ${h}:${min} (UTC+${timezone})`);
-    console.log(`📅 UTC calcolato: ${utc.year}-${utc.month}-${utc.day} ${utc.hour}:${utc.min}:${utc.sec}`);
+    console.log(`📅 Ora italiana: ${h}:${min} (CET UTC+1) -> UT: ${oraUt.toFixed(6)}`);
+    console.log(`📅 Data UT: ${annoJD}-${meseJD}-${giornoJD}`);
     
-    // Converti UTC in Julian Day (restituisce [jd_ut, jd_tt])
-    const jdResult = swisseph.swe_utc_to_jd(utc.year, utc.month, utc.day, utc.hour, utc.min, utc.sec, 1);
-    const jd = jdResult[0]; // jd_ut
-    
-    console.log(`📆 Julian Day (UT): ${jd.toFixed(8)}`);
-    
+    // Calcola Julian Day
+    const jd = swisseph.swe_julday(annoJD, meseJD, giornoJD, oraUt, swisseph.SE_GREG_CAL);
     const latNum = parseFloat(lat);
     const lonNum = parseFloat(lon);
     
+    console.log(`📆 Julian Day (UT): ${jd.toFixed(8)}`);
+    
     const segni = ['Ariete ♈', 'Toro ♉', 'Gemelli ♊', 'Cancro ♋', 'Leone ♌', 'Vergine ♍', 'Bilancia ♎', 'Scorpione ♏', 'Sagittario ♐', 'Capricorno ♑', 'Acquario ♒', 'Pesci ♓'];
     
-    // Funzione per convertire longitudine in segno + grado
     function getSegnoGrado(long) {
       if (long === undefined || long === null) return null;
       const indiceSegno = Math.floor(long / 30);
