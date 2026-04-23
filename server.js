@@ -36,13 +36,11 @@ app.get('/', (req, res) => {
 });
 
 // =======================
-// 🔧 SAFE CALC - CORRETTO
+// 🔧 SAFE CALC
 // =======================
 function calcPlanet(jd, planet) {
   try {
     if (!planet && planet !== 0) return null;
-
-    console.log(`🪐 Calcolo pianeta ID: ${planet} per JD: ${jd}`);
 
     const result = swisseph.swe_calc_ut(
       jd,
@@ -50,17 +48,8 @@ function calcPlanet(jd, planet) {
       swisseph.SEFLG_SWIEPH | swisseph.SEFLG_SPEED
     );
 
-    if (!result) {
-      console.log(`❌ Nessun risultato per pianeta ${planet}`);
-      return null;
-    }
+    if (!result) return null;
 
-    // Gestione speciale per il Sole (ID 0)
-    if (planet === 0) {
-      console.log(`🔴 SOLE - Risultato:`, JSON.stringify(result));
-    }
-
-    // Estrae la longitudine - la libreria restituisce un oggetto
     let longitudine = null;
     
     if (typeof result.longitude === 'number') {
@@ -71,16 +60,9 @@ function calcPlanet(jd, planet) {
       longitudine = result[0];
     }
 
-    if (longitudine === null || longitudine === undefined) {
-      console.log(`❌ Nessuna longitudine per pianeta ${planet}`);
-      return null;
-    }
-
-    console.log(`✅ Longitudine per pianeta ${planet}: ${longitudine}`);
     return longitudine;
 
   } catch (e) {
-    console.error(`❌ Planet calc error per ID ${planet}:`, e.message);
     return null;
   }
 }
@@ -109,63 +91,31 @@ function getPlanetData(jd, planet) {
 }
 
 // =======================
-// 🏠 CALCOLO CASE ASTROLOGICHE (versione CORRETTA - usa result.asc e result.mc)
+// 🏠 CALCOLO CASE ASTROLOGICHE - VERSIONE DEFINITIVA CORRETTA
 // =======================
 function calcolaCase(jd, lat, lon) {
   try {
     console.log(`🏠 Calcolo case con jd=${jd}, lat=${lat}, lon=${lon}`);
     
-    if (typeof swisseph.swe_houses !== 'function') {
-      console.log(`❌ swe_houses non è una funzione`);
-      return null;
-    }
-    
     const result = swisseph.swe_houses(jd, lat, lon, 'P');
-    console.log(`📊 swe_houses result keys:`, Object.keys(result));
     
     // Ottieni le cuspidi delle case
-    let cuspidi = null;
-    if (result.house && Array.isArray(result.house)) {
-      cuspidi = result.house;
-      console.log(`✅ Trovato result.house con ${cuspidi.length} elementi`);
-    } else if (result.cusps && Array.isArray(result.cusps)) {
-      cuspidi = result.cusps;
-      console.log(`✅ Trovato result.cusps con ${cuspidi.length} elementi`);
-    } else if (result.houses && Array.isArray(result.houses)) {
-      cuspidi = result.houses;
-      console.log(`✅ Trovato result.houses con ${cuspidi.length} elementi`);
-    }
+    let cuspidi = result.house || result.cusps || result.houses;
     
     if (!cuspidi || cuspidi.length < 12) {
       console.log(`❌ Impossibile trovare le cuspidi`);
       return null;
     }
     
-    // 🔥 CORREZIONE: usa result.asc e result.mc invece di cuspidi[0] e cuspidi[9]
-    let ascendenteLong = null;
-    let medioCieloLong = null;
+    // 🔥 CORREZIONE DEFINITIVA: ascmc[0] = Ascendente, ascmc[1] = MC
+    let ascendenteLong = result.ascmc ? result.ascmc[0] : cuspidi[0];
+    let medioCieloLong = result.ascmc ? result.ascmc[1] : cuspidi[9];
     
-    if (result.asc !== undefined && result.asc !== null) {
-      ascendenteLong = result.asc;
-      console.log(`✅ Ascendente da result.asc: ${ascendenteLong}`);
-    } else if (cuspidi[0] !== undefined) {
-      ascendenteLong = cuspidi[0];
-      console.log(`⚠️ Fallback: Ascendente da cuspidi[0]: ${ascendenteLong}`);
-    }
+    console.log(`📊 Ascendente: ${ascendenteLong}°`);
+    console.log(`📊 Medio Cielo: ${medioCieloLong}°`);
     
-    if (result.mc !== undefined && result.mc !== null) {
-      medioCieloLong = result.mc;
-      console.log(`✅ Medio Cielo da result.mc: ${medioCieloLong}`);
-    } else if (cuspidi[9] !== undefined) {
-      medioCieloLong = cuspidi[9];
-      console.log(`⚠️ Fallback: Medio Cielo da cuspidi[9]: ${medioCieloLong}`);
-    }
-    
-    // Calcola Discendente e Fondo Cielo come opposti
     const discendenteLong = (ascendenteLong + 180) % 360;
     const fondoCieloLong = (medioCieloLong + 180) % 360;
-    
-    console.log(`📊 AC: ${ascendenteLong}, MC: ${medioCieloLong}, DC: ${discendenteLong}, FC: ${fondoCieloLong}`);
     
     const segni = [
       'Ariete ♈', 'Toro ♉', 'Gemelli ♊', 'Cancro ♋',
@@ -174,7 +124,6 @@ function calcolaCase(jd, lat, lon) {
     ];
     
     function getSegnoGrado(long) {
-      if (long === null) return null;
       const indiceSegno = Math.floor(long / 30);
       const grado = (long % 30).toFixed(2);
       return {
@@ -203,10 +152,8 @@ function calcolaCase(jd, lat, lon) {
 // =======================
 function calcolaNodiLunari(jd) {
   try {
-    // Nodo Nord (vero) - ID 11 in Swiss Ephemeris
     const nodoNordResult = swisseph.swe_calc_ut(jd, 11, swisseph.SEFLG_SWIEPH);
     
-    // Nodo Sud è l'opposto del Nodo Nord
     let nodoNordLong = null;
     let nodoSudLong = null;
     
@@ -248,7 +195,6 @@ function calcolaNodiLunari(jd) {
 function calcolaAspetti(pianeti) {
   const aspetti = [];
   
-  // Lista degli aspetti da cercare
   const aspettiLista = [
     { nome: 'Congiunzione', angolo: 0, orb: 8, colore: '#ffffff' },
     { nome: 'Sestile', angolo: 60, orb: 6, colore: '#66ff66' },
@@ -257,47 +203,33 @@ function calcolaAspetti(pianeti) {
     { nome: 'Opposizione', angolo: 180, orb: 8, colore: '#ff3366' }
   ];
   
-  // Lista dei pianeti con i loro nomi
   const pianetiLista = [
-    { nome: 'sole' },
-    { nome: 'luna' },
-    { nome: 'mercurio' },
-    { nome: 'venere' },
-    { nome: 'marte' },
-    { nome: 'giove' },
-    { nome: 'saturno' },
-    { nome: 'urano' },
-    { nome: 'nettuno' },
-    { nome: 'plutone' },
-    { nome: 'chirone' },
-    { nome: 'lilith' }
+    'sole', 'luna', 'mercurio', 'venere', 'marte',
+    'giove', 'saturno', 'urano', 'nettuno', 'plutone', 'chirone', 'lilith'
   ];
   
-  // Per ogni coppia di pianeti
   for (let i = 0; i < pianetiLista.length; i++) {
     for (let j = i + 1; j < pianetiLista.length; j++) {
       const p1 = pianetiLista[i];
       const p2 = pianetiLista[j];
       
-      const p1Data = pianeti[p1.nome];
-      const p2Data = pianeti[p2.nome];
+      const p1Data = pianeti[p1];
+      const p2Data = pianeti[p2];
       
       if (!p1Data || !p2Data) continue;
       
       const long1 = p1Data.longitudine;
       const long2 = p2Data.longitudine;
       
-      // Calcola la differenza angolare
       let diff = Math.abs(long1 - long2);
       if (diff > 180) diff = 360 - diff;
       
-      // Controlla ogni tipo di aspetto
       for (const aspetto of aspettiLista) {
         let diffAspetto = Math.abs(diff - aspetto.angolo);
         if (diffAspetto <= aspetto.orb) {
           aspetti.push({
-            pianeta1: p1.nome,
-            pianeta2: p2.nome,
+            pianeta1: p1,
+            pianeta2: p2,
             aspetto: aspetto.nome,
             angolo: aspetto.angolo,
             orb: diffAspetto.toFixed(2),
@@ -325,9 +257,7 @@ app.post('/tema-natale', (req, res) => {
       return res.status(400).json({ errore: 'Dati mancanti' });
     }
 
-    // 🔥 CORREZIONE: usa SOLO i valori inviati dal frontend
     if (!lat || !lon) {
-      console.log(`❌ ERRORE: lat o lon mancanti!`);
       return res.status(400).json({ errore: 'Latitudine e longitudine richieste' });
     }
 
@@ -335,23 +265,15 @@ app.post('/tema-natale', (req, res) => {
     const longitudine = parseFloat(lon);
 
     if (isNaN(latitudine) || isNaN(longitudine)) {
-      console.log(`❌ ERRORE: lat o lon non validi: lat=${lat}, lon=${lon}`);
       return res.status(400).json({ errore: 'Latitudine o longitudine non valide' });
     }
     
-    console.log(`📍 Calcolo con lat=${latitudine}, lon=${longitudine}`);
-
     const [y, m, d] = data.split('-').map(Number);
     const [h, min] = ora.split(':').map(Number);
     const ut = h + min / 60;
 
     const jd = swisseph.swe_julday(y, m, d, ut, swisseph.SE_GREG_CAL);
 
-    console.log(`📆 Julian Day calcolato: ${jd}`);
-
-    // =======================
-    // 🌟 PIANETI
-    // =======================
     const pianeti = {
       sole: getPlanetData(jd, swisseph.SE_SUN),
       luna: getPlanetData(jd, swisseph.SE_MOON),
@@ -367,19 +289,8 @@ app.post('/tema-natale', (req, res) => {
       lilith: getPlanetData(jd, swisseph.SE_MEAN_APOG)
     };
 
-    // =======================
-    // 🏠 CASE ASTROLOGICHE
-    // =======================
     const caseAstrologiche = calcolaCase(jd, latitudine, longitudine);
-
-    // =======================
-    // 🔗 ASPETTI PLANETARI
-    // =======================
     const aspetti = calcolaAspetti(pianeti);
-
-    // =======================
-    // 🌙 NODI LUNARI
-    // =======================
     const nodiLunari = calcolaNodiLunari(jd);
 
     res.json({ 
