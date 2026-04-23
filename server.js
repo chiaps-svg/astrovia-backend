@@ -36,14 +36,15 @@ app.get('/', (req, res) => {
 });
 
 // =======================
-// 🔧 SAFE CALC
+// 🔧 SAFE CALC - ALTA PRECISIONE
 // =======================
-function calcPlanet(jd, planet) {
+function calcPlanet(jdUt, planet) {
   try {
     if (!planet && planet !== 0) return null;
 
+    // Usa swe_calc_ut che gestisce automaticamente la conversione UT -> TT
     const result = swisseph.swe_calc_ut(
-      jd,
+      jdUt,
       planet,
       swisseph.SEFLG_SWIEPH | swisseph.SEFLG_SPEED
     );
@@ -91,27 +92,13 @@ function getPlanetData(jd, planet) {
 }
 
 // =======================
-// 🏠 CALCOLO CASE ASTROLOGICHE - VERSIONE CON DEBUG
+// 🏠 CALCOLO CASE ASTROLOGICHE
 // =======================
 function calcolaCase(jd, lat, lon) {
   try {
     console.log(`🏠 Calcolo case con jd=${jd}, lat=${lat}, lon=${lon}`);
     
     const result = swisseph.swe_houses(jd, lat, lon, 'P');
-    
-    // 🔥 DEBUG: stampa TUTTE le proprietà dell'oggetto result
-    console.log(`📊 TUTTE le proprietà di result:`, Object.keys(result));
-    
-    // 🔥 DEBUG: stampa ascmc se esiste
-    if (result.ascmc) {
-      console.log(`📊 ascmc: [${result.ascmc.join(', ')}]`);
-    } else {
-      console.log(`❌ ascmc NON TROVATO!`);
-    }
-    
-    // 🔥 DEBUG: stampa asc e mc se esistono
-    if (result.asc !== undefined) console.log(`📊 asc: ${result.asc}`);
-    if (result.mc !== undefined) console.log(`📊 mc: ${result.mc}`);
     
     // Ottieni le cuspidi delle case
     let cuspidi = result.house || result.cusps || result.houses;
@@ -121,26 +108,19 @@ function calcolaCase(jd, lat, lon) {
       return null;
     }
     
-    // Determina Ascendente e MC
+    // Usa ascmc per Ascendente e MC (metodo standard)
     let ascendenteLong = null;
     let medioCieloLong = null;
     
-    // Prova in ordine: ascmc, poi asc/mc separati, poi fallback cuspidi
     if (result.ascmc && Array.isArray(result.ascmc) && result.ascmc.length >= 2) {
       ascendenteLong = result.ascmc[0];
       medioCieloLong = result.ascmc[1];
-      console.log(`✅ Usato ascmc: AC=${ascendenteLong}, MC=${medioCieloLong}`);
-    } else if (result.asc !== undefined && result.mc !== undefined) {
-      ascendenteLong = result.asc;
-      medioCieloLong = result.mc;
-      console.log(`✅ Usato asc/mc: AC=${ascendenteLong}, MC=${medioCieloLong}`);
+      console.log(`✅ Ascendente: ${ascendenteLong}°, MC: ${medioCieloLong}°`);
     } else {
       ascendenteLong = cuspidi[0];
       medioCieloLong = cuspidi[9];
-      console.log(`⚠️ Fallback cuspidi: AC=${ascendenteLong}, MC=${medioCieloLong}`);
+      console.log(`⚠️ Fallback: Ascendente: ${ascendenteLong}°, MC: ${medioCieloLong}°`);
     }
-    
-    console.log(`📊 ASCENDENTE FINALE: ${ascendenteLong}° -> Segno: ${Math.floor(ascendenteLong / 30)}`);
     
     const discendenteLong = (ascendenteLong + 180) % 360;
     const fondoCieloLong = (medioCieloLong + 180) % 360;
@@ -272,7 +252,7 @@ function calcolaAspetti(pianeti) {
 }
 
 // =======================
-// 🌌 API
+// 🌌 API - CONVERSIONE TEMPO STANDARD
 // =======================
 app.post('/tema-natale', (req, res) => {
 
@@ -296,45 +276,67 @@ app.post('/tema-natale', (req, res) => {
       return res.status(400).json({ errore: 'Latitudine o longitudine non valide' });
     }
     
-    // 🔥 CORREZIONE FUSO ORARIO: sottrai 1 ora per l'Italia (CET)
-    // L'ora inserita dall'utente è locale italiana, ma Swiss Ephemeris vuole UT/GMT
+    // =======================
+    // 🔥 CONVERSIONE PRECISA DEL TEMPO (STANDARD SE)
+    // =======================
     const [y, m, d] = data.split('-').map(Number);
     let [h, min] = ora.split(':').map(Number);
+    let sec = 0;
     
-    // Sottrai 1 ora per il fuso orario italiano (CET)
-    let ut = h + min / 60 - 1;
-    // Gestisci il cambio di giorno se l'ora diventa negativa
-    let giornoJD = d;
-    if (ut < 0) {
-      ut += 24;
-      giornoJD--;
-    }
+    // Fuso orario italiano: CET = +1 (sempre per date storiche)
+    // Per semplificare, usiamo +1. In futuro si può migliorare con ora legale
+    const timezone = 1; // CET (Italia)
     
-    console.log(`📅 Ora locale: ${h}:${min} -> UT: ${ut.toFixed(2)}`);
+    // Usa la funzione ufficiale per convertire ora locale in UTC
+    // Questa funzione gestisce correttamente i secondi intercalari
+    const utc = swisseph.swe_utc_time_zone(y, m, d, h, min, sec, timezone);
+    
+    console.log(`📅 Ora locale: ${h}:${min} (UTC+${timezone})`);
+    console.log(`📅 UTC calcolato: ${utc.year}-${utc.month}-${utc.day} ${utc.hour}:${utc.min}:${utc.sec}`);
+    
+    // Converti UTC in Julian Day
+    const jd = swisseph.swe_utc_to_jd(utc.year, utc.month, utc.day, utc.hour, utc.min, utc.sec, 1);
+    
+    // swe_utc_to_jd restituisce un array [jd_ut, jd_tt]
+    const jdUt = jd[0]; // Julian Day in UT (Universal Time)
+    
+    console.log(`📆 Julian Day (UT): ${jdUt}`);
 
-    const jd = swisseph.swe_julday(y, m, giornoJD, ut, swisseph.SE_GREG_CAL);
-
+    // =======================
+    // 🌟 PIANETI (calcolati con jdUt, swe_calc_ut gestisce TT internamente)
+    // =======================
     const pianeti = {
-      sole: getPlanetData(jd, swisseph.SE_SUN),
-      luna: getPlanetData(jd, swisseph.SE_MOON),
-      mercurio: getPlanetData(jd, swisseph.SE_MERCURY),
-      venere: getPlanetData(jd, swisseph.SE_VENUS),
-      marte: getPlanetData(jd, swisseph.SE_MARS),
-      giove: getPlanetData(jd, swisseph.SE_JUPITER),
-      saturno: getPlanetData(jd, swisseph.SE_SATURN),
-      urano: getPlanetData(jd, swisseph.SE_URANUS),
-      nettuno: getPlanetData(jd, swisseph.SE_NEPTUNE),
-      plutone: getPlanetData(jd, swisseph.SE_PLUTO),
-      chirone: getPlanetData(jd, swisseph.SE_CHIRON),
-      lilith: getPlanetData(jd, swisseph.SE_MEAN_APOG)
+      sole: getPlanetData(jdUt, swisseph.SE_SUN),
+      luna: getPlanetData(jdUt, swisseph.SE_MOON),
+      mercurio: getPlanetData(jdUt, swisseph.SE_MERCURY),
+      venere: getPlanetData(jdUt, swisseph.SE_VENUS),
+      marte: getPlanetData(jdUt, swisseph.SE_MARS),
+      giove: getPlanetData(jdUt, swisseph.SE_JUPITER),
+      saturno: getPlanetData(jdUt, swisseph.SE_SATURN),
+      urano: getPlanetData(jdUt, swisseph.SE_URANUS),
+      nettuno: getPlanetData(jdUt, swisseph.SE_NEPTUNE),
+      plutone: getPlanetData(jdUt, swisseph.SE_PLUTO),
+      chirone: getPlanetData(jdUt, swisseph.SE_CHIRON),
+      lilith: getPlanetData(jdUt, swisseph.SE_MEAN_APOG)
     };
 
-    const caseAstrologiche = calcolaCase(jd, latitudine, longitudine);
+    // =======================
+    // 🏠 CASE ASTROLOGICHE
+    // =======================
+    const caseAstrologiche = calcolaCase(jdUt, latitudine, longitudine);
+
+    // =======================
+    // 🔗 ASPETTI PLANETARI
+    // =======================
     const aspetti = calcolaAspetti(pianeti);
-    const nodiLunari = calcolaNodiLunari(jd);
+
+    // =======================
+    // 🌙 NODI LUNARI
+    // =======================
+    const nodiLunari = calcolaNodiLunari(jdUt);
 
     res.json({ 
-      jd, 
+      jd: jdUt, 
       pianeti,
       case: caseAstrologiche,
       aspetti: aspetti,
