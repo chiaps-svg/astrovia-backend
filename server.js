@@ -9,6 +9,30 @@ if (fs.existsSync('./ephe')) {
   console.log('🔍 Contenuto di ./ephe:', fs.readdirSync('./ephe'));
   swisseph.swe_set_ephe_path('./ephe');
   console.log('✅ Percorso impostato su ./ephe');
+  
+  // =======================
+  // 🔥 FORZA L'USO DEL FILE swe_deltat.txt
+  // =======================
+  try {
+    // Verifica se il file esiste
+    const deltaTFile = './ephe/swe_deltat.txt';
+    if (fs.existsSync(deltaTFile)) {
+      console.log('✅ File swe_deltat.txt trovato');
+      
+      // Se disponibile, forza l'uso del file
+      if (typeof swisseph.swe_set_delta_t_userdef === 'function') {
+        swisseph.swe_set_delta_t_userdef(1);
+        console.log('✅ Uso forzato di swe_deltat.txt');
+      } else {
+        console.log('⚠️ swe_set_delta_t_userdef non disponibile in questa versione');
+      }
+    } else {
+      console.log('⚠️ File swe_deltat.txt non trovato nella cartella ephe');
+    }
+  } catch(e) {
+    console.log('⚠️ Errore configurazione Delta T:', e.message);
+  }
+  
 } else {
   console.log('❌ NESSUN PERCORSO TROVATO!');
 }
