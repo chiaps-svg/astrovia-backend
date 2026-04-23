@@ -40,6 +40,60 @@ app.get('/', (req, res) => res.send('Backend Astrovia funzionante 🚀'));
 app.get('/ping', (req, res) => res.send('OK'));
 
 // =======================
+// 🔗 CALCOLO ASPETTI PLANETARI
+// =======================
+function calcolaAspetti(pianeti) {
+  const aspetti = [];
+  
+  const aspettiLista = [
+    { nome: 'Congiunzione ♌', angolo: 0, orb: 8, colore: '#ffffff' },
+    { nome: 'Sestile ⚹', angolo: 60, orb: 6, colore: '#66ff66' },
+    { nome: 'Quadrato □', angolo: 90, orb: 8, colore: '#ff6666' },
+    { nome: 'Trigono △', angolo: 120, orb: 8, colore: '#6666ff' },
+    { nome: 'Opposizione ☍', angolo: 180, orb: 8, colore: '#ff3366' }
+  ];
+  
+  const pianetiLista = [
+    'sole', 'luna', 'mercurio', 'venere', 'marte',
+    'giove', 'saturno', 'urano', 'nettuno', 'plutone', 'chirone', 'lilith'
+  ];
+  
+  for (let i = 0; i < pianetiLista.length; i++) {
+    for (let j = i + 1; j < pianetiLista.length; j++) {
+      const p1 = pianetiLista[i];
+      const p2 = pianetiLista[j];
+      
+      const p1Data = pianeti[p1];
+      const p2Data = pianeti[p2];
+      
+      if (!p1Data || !p2Data) continue;
+      
+      const long1 = p1Data.longitudine;
+      const long2 = p2Data.longitudine;
+      
+      let diff = Math.abs(long1 - long2);
+      if (diff > 180) diff = 360 - diff;
+      
+      for (const aspetto of aspettiLista) {
+        let diffAspetto = Math.abs(diff - aspetto.angolo);
+        if (diffAspetto <= aspetto.orb) {
+          aspetti.push({
+            pianeta1: p1,
+            pianeta2: p2,
+            aspetto: aspetto.nome,
+            angolo: aspetto.angolo,
+            orb: diffAspetto.toFixed(2),
+            colore: aspetto.colore
+          });
+        }
+      }
+    }
+  }
+  
+  return aspetti;
+}
+
+// =======================
 // 🌌 API - CON CORREZIONE PRECISA DEL FUSO ORARIO
 // =======================
 app.post('/tema-natale', (req, res) => {
@@ -208,7 +262,8 @@ app.post('/tema-natale', (req, res) => {
     // =======================
     // 4. CALCOLO ASPETTI
     // =======================
-    const aspetti = [];
+    const aspetti = calcolaAspetti(pianeti);
+    console.log(`🔗 Trovati ${aspetti.length} aspetti planetari`);
     
     console.log('📤 INVIO RISPOSTA AL FRONTEND');
     
