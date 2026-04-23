@@ -85,7 +85,7 @@ function calcolaAspetti(pianeti) {
 }
 
 // =======================
-// 🌌 API - CON GESTIONE FUSO ORARIO
+// 🌌 API - CONVERSIONE PRECISA UTC -> JD
 // =======================
 app.post('/tema-natale', (req, res) => {
   console.log('\n🔥 RICHIESTA RICEVUTA');
@@ -99,42 +99,25 @@ app.post('/tema-natale', (req, res) => {
     }
 
     // =======================
-    // 🔥 CONVERSIONE FUSO ORARIO ITALIA (CET = UTC+1)
-    // L'ora inserita è italiana, dobbiamo sottrarre 1 ora per ottenere UT
+    // 🔥 CONVERSIONE UTC -> JD (METODO UFFICIALE E PRECISO)
     // =======================
     const [y, m, d] = data.split('-').map(Number);
     let [h, min] = ora.split(':').map(Number);
+    let sec = 0;
     
-    // Sottrai 1 ora per l'Italia (CET)
-    let oraUt = h + min / 60 - 1;
-    let giornoJD = d;
-    let meseJD = m;
-    let annoJD = y;
+    // Per l'Italia: CET = UTC+1 (ora solare)
+    const timezoneOffset = 1;
     
-    // Gestisci il cambio di giorno
-    if (oraUt < 0) {
-      oraUt += 24;
-      giornoJD--;
-      
-      if (giornoJD < 1) {
-        const giorniMese = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-        const isLeap = (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
-        if (isLeap) giorniMese[1] = 29;
-        
-        meseJD--;
-        if (meseJD < 1) {
-          meseJD = 12;
-          annoJD--;
-        }
-        giornoJD = giorniMese[meseJD - 1];
-      }
-    }
+    // 1. Converte l'ora italiana (CET) in UTC
+    const utc = swisseph.swe_utc_time_zone(y, m, d, h, min, sec, timezoneOffset);
     
-    console.log(`📅 Ora italiana: ${h}:${min} (CET UTC+1) -> UT: ${oraUt.toFixed(6)}`);
-    console.log(`📅 Data UT: ${annoJD}-${meseJD}-${giornoJD}`);
+    console.log(`📅 Ora italiana: ${h}:${min} (CET UTC+1)`);
+    console.log(`📅 UTC calcolato: ${utc.year}-${utc.month}-${utc.day} ${utc.hour}:${utc.min}:${utc.sec}`);
     
-    // Calcola Julian Day
-    const jd = swisseph.swe_julday(annoJD, meseJD, giornoJD, oraUt, swisseph.SE_GREG_CAL);
+    // 2. Converte UTC in Julian Day (restituisce [jd_ut, jd_tt])
+    const jdResult = swisseph.swe_utc_to_jd(utc.year, utc.month, utc.day, utc.hour, utc.min, utc.sec, 1);
+    const jd = jdResult[0]; // JD in Universal Time
+    
     const latNum = parseFloat(lat);
     const lonNum = parseFloat(lon);
     
