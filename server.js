@@ -13,6 +13,16 @@ if (fs.existsSync('./ephe')) {
   console.log('❌ NESSUN PERCORSO TROVATO!');
 }
 
+// =======================
+// ⚙️ CONFIGURAZIONE PRECISIONE MASSIMA (DE431)
+// =======================
+if (typeof swisseph.swe_set_tid_acc === 'function') {
+    swisseph.swe_set_tid_acc(-26.0);
+    console.log('✅ Precisione massima attivata (modello DE431)');
+} else {
+    console.log('⚠️ Configurazione precisione non disponibile');
+}
+
 const app = express();
 
 app.use((req, res, next) => {
