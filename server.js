@@ -25,7 +25,15 @@ if (fs.existsSync('./ephe')) {
 
 const app = express();
 
-app.use(cors());
+// =======================
+// 🔥 CONFIGURAZIONE CORS CORRETTA
+// =======================
+app.use(cors({
+  origin: ['http://localhost:8100', 'https://astrovia-backend-sfov.onrender.com'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 app.use(express.json());
 
 // =======================
