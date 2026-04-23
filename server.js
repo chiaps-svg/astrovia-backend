@@ -11,26 +11,17 @@ if (fs.existsSync('./ephe')) {
   console.log('✅ Percorso impostato su ./ephe');
   
   // =======================
-  // 🔥 FORZA L'USO DEL FILE swe_deltat.txt
+  // 🔥 VERIFICA FILE swe_deltat.txt
   // =======================
   try {
-    // Verifica se il file esiste
     const deltaTFile = './ephe/swe_deltat.txt';
     if (fs.existsSync(deltaTFile)) {
       console.log('✅ File swe_deltat.txt trovato');
-      
-      // Se disponibile, forza l'uso del file
-      if (typeof swisseph.swe_set_delta_t_userdef === 'function') {
-        swisseph.swe_set_delta_t_userdef(1);
-        console.log('✅ Uso forzato di swe_deltat.txt');
-      } else {
-        console.log('⚠️ swe_set_delta_t_userdef non disponibile in questa versione');
-      }
     } else {
       console.log('⚠️ File swe_deltat.txt non trovato nella cartella ephe');
     }
   } catch(e) {
-    console.log('⚠️ Errore configurazione Delta T:', e.message);
+    console.log('⚠️ Errore verifica Delta T:', e.message);
   }
   
 } else {
@@ -119,6 +110,50 @@ function calcolaAspetti(pianeti) {
 }
 
 // =======================
+// 🔧 CALCOLO PRECISO - METODO UFFICIALE (Delta T + swe_calc)
+// =======================
+function calcPlanet(id, nome, jdUt) {
+  try {
+    if (!id && id !== 0) return null;
+    
+    // 1. CALCOLA IL DELTA T (differenza tra UT e TT)
+    const deltaT = swisseph.swe_deltat(jdUt);
+    console.log(`📐 Delta T per ${nome}: ${deltaT} giorni`);
+    
+    // 2. OTTIENI IL JULIAN DAY IN TEMPO DINAMICO (TT)
+    const jdTT = jdUt + deltaT;
+    
+    // 3. USA swe_calc CON IL JD IN TT (metodo classico e preciso)
+    const result = swisseph.swe_calc(
+      jdTT,
+      id,
+      swisseph.SEFLG_SWIEPH | swisseph.SEFLG_SPEED
+    );
+    
+    if (!result) return null;
+    
+    let longitudine = null;
+    if (typeof result.longitude === 'number') {
+      longitudine = result.longitude;
+    } else if (typeof result === 'number') {
+      longitudine = result;
+    } else if (Array.isArray(result) && result.length > 0) {
+      longitudine = result[0];
+    }
+    
+    if (longitudine !== null) {
+      console.log(`✅ ${nome}: ${longitudine.toFixed(4)}° (TT)`);
+    }
+    
+    return longitudine;
+    
+  } catch (e) {
+    console.error(`❌ Errore calcolo ${nome}:`, e.message);
+    return null;
+  }
+}
+
+// =======================
 // 🌌 API - CONVERSIONE MANUALE PRECISA
 // =======================
 app.post('/tema-natale', (req, res) => {
@@ -145,8 +180,7 @@ app.post('/tema-natale', (req, res) => {
     let giornoJD = d;
     let meseJD = m;
     let annoJD = y;
-
-        
+    
     // Gestisci il cambio di giorno
     if (oraUt < 0) {
       oraUt += 24;
@@ -169,12 +203,12 @@ app.post('/tema-natale', (req, res) => {
     console.log(`📅 Ora italiana: ${h}:${min} (CET UTC+1) -> UT: ${oraUt.toFixed(6)}`);
     console.log(`📅 Data UT: ${annoJD}-${meseJD}-${giornoJD}`);
     
-    // Calcola Julian Day
-    const jd = swisseph.swe_julday(annoJD, meseJD, giornoJD, oraUt, swisseph.SE_GREG_CAL);
+    // Calcola Julian Day in UT
+    const jdUt = swisseph.swe_julday(annoJD, meseJD, giornoJD, oraUt, swisseph.SE_GREG_CAL);
     const latNum = parseFloat(lat);
     const lonNum = parseFloat(lon);
     
-    console.log(`📆 Julian Day (UT): ${jd.toFixed(8)}`);
+    console.log(`📆 Julian Day (UT): ${jdUt.toFixed(8)}`);
     
     const segni = ['Ariete ♈', 'Toro ♉', 'Gemelli ♊', 'Cancro ♋', 'Leone ♌', 'Vergine ♍', 'Bilancia ♎', 'Scorpione ♏', 'Sagittario ♐', 'Capricorno ♑', 'Acquario ♒', 'Pesci ♓'];
     
@@ -192,7 +226,7 @@ app.post('/tema-natale', (req, res) => {
     // =======================
     // 1. CALCOLO CASE E CARDINI
     // =======================
-    const houses = swisseph.swe_houses(jd, latNum, lonNum, 'P');
+    const houses = swisseph.swe_houses(jdUt, latNum, lonNum, 'P');
     const cuspidi = houses.house;
     const ascendenteLong = houses.ascmc ? houses.ascmc[0] : cuspidi[0];
     const medioCieloLong = houses.ascmc ? houses.ascmc[1] : cuspidi[9];
@@ -209,35 +243,21 @@ app.post('/tema-natale', (req, res) => {
     };
     
     // =======================
-    // 2. CALCOLO PIANETI
+    // 2. CALCOLO PIANETI (USANDO IL NUOVO METODO)
     // =======================
-    function calcPlanet(id, nome) {
-      try {
-        const result = swisseph.swe_calc_ut(jd, id, swisseph.SEFLG_SWIEPH | swisseph.SEFLG_SPEED);
-        if (result && result.longitude !== undefined) {
-          const long = result.longitude;
-          console.log(`✅ ${nome}: ${long.toFixed(4)}°`);
-          return getSegnoGrado(long);
-        }
-      } catch(e) {
-        console.log(`❌ ${nome}: errore - ${e.message}`);
-      }
-      return null;
-    }
-    
     const pianeti = {
-      sole: calcPlanet(swisseph.SE_SUN, 'Sole'),
-      luna: calcPlanet(swisseph.SE_MOON, 'Luna'),
-      mercurio: calcPlanet(swisseph.SE_MERCURY, 'Mercurio'),
-      venere: calcPlanet(swisseph.SE_VENUS, 'Venere'),
-      marte: calcPlanet(swisseph.SE_MARS, 'Marte'),
-      giove: calcPlanet(swisseph.SE_JUPITER, 'Giove'),
-      saturno: calcPlanet(swisseph.SE_SATURN, 'Saturno'),
-      urano: calcPlanet(swisseph.SE_URANUS, 'Urano'),
-      nettuno: calcPlanet(swisseph.SE_NEPTUNE, 'Nettuno'),
-      plutone: calcPlanet(swisseph.SE_PLUTO, 'Plutone'),
-      chirone: calcPlanet(swisseph.SE_CHIRON, 'Chirone'),
-      lilith: calcPlanet(swisseph.SE_MEAN_APOG, 'Lilith')
+      sole: getSegnoGrado(calcPlanet(swisseph.SE_SUN, 'Sole', jdUt)),
+      luna: getSegnoGrado(calcPlanet(swisseph.SE_MOON, 'Luna', jdUt)),
+      mercurio: getSegnoGrado(calcPlanet(swisseph.SE_MERCURY, 'Mercurio', jdUt)),
+      venere: getSegnoGrado(calcPlanet(swisseph.SE_VENUS, 'Venere', jdUt)),
+      marte: getSegnoGrado(calcPlanet(swisseph.SE_MARS, 'Marte', jdUt)),
+      giove: getSegnoGrado(calcPlanet(swisseph.SE_JUPITER, 'Giove', jdUt)),
+      saturno: getSegnoGrado(calcPlanet(swisseph.SE_SATURN, 'Saturno', jdUt)),
+      urano: getSegnoGrado(calcPlanet(swisseph.SE_URANUS, 'Urano', jdUt)),
+      nettuno: getSegnoGrado(calcPlanet(swisseph.SE_NEPTUNE, 'Nettuno', jdUt)),
+      plutone: getSegnoGrado(calcPlanet(swisseph.SE_PLUTO, 'Plutone', jdUt)),
+      chirone: getSegnoGrado(calcPlanet(swisseph.SE_CHIRON, 'Chirone', jdUt)),
+      lilith: getSegnoGrado(calcPlanet(swisseph.SE_MEAN_APOG, 'Lilith', jdUt))
     };
     
     // =======================
@@ -245,9 +265,8 @@ app.post('/tema-natale', (req, res) => {
     // =======================
     let nodiLunari = null;
     try {
-      const nodoNordResult = swisseph.swe_calc_ut(jd, 11, swisseph.SEFLG_SWIEPH);
-      if (nodoNordResult && nodoNordResult.longitude !== undefined) {
-        const nodoNordLong = nodoNordResult.longitude;
+      const nodoNordLong = calcPlanet(11, 'Nodo Nord', jdUt);
+      if (nodoNordLong !== null) {
         nodiLunari = {
           nodoNord: getSegnoGrado(nodoNordLong),
           nodoSud: getSegnoGrado((nodoNordLong + 180) % 360)
@@ -266,7 +285,7 @@ app.post('/tema-natale', (req, res) => {
     console.log('📤 INVIO RISPOSTA AL FRONTEND');
     
     res.json({ 
-      jd: jd,
+      jd: jdUt,
       pianeti: pianeti,
       case: caseAstrologiche,
       aspetti: aspetti,
