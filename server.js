@@ -40,7 +40,7 @@ app.get('/', (req, res) => res.send('Backend Astrovia funzionante 🚀'));
 app.get('/ping', (req, res) => res.send('OK'));
 
 // =======================
-// 🌌 API - FORMATO COMPATIBILE CON FRONTEND
+// 🌌 API - CON CORREZIONE PRECISA DEL FUSO ORARIO
 // =======================
 app.post('/tema-natale', (req, res) => {
   console.log('\n🔥 RICHIESTA RICEVUTA');
@@ -53,16 +53,75 @@ app.post('/tema-natale', (req, res) => {
       return res.status(400).json({ errore: 'Parametri mancanti' });
     }
 
-    // Conversione data/ora
+    // =======================
+    // 🔥 CONVERSIONE FUSO ORARIO PRECISA PER L'ITALIA
+    // =======================
     const [y, m, d] = data.split('-').map(Number);
     let [h, min] = ora.split(':').map(Number);
-    const ut = h + min / 60;
     
-    const jd = swisseph.swe_julday(y, m, d, ut, swisseph.SE_GREG_CAL);
+    // Funzione per determinare se è ora legale (semplificata per l'Italia)
+    // Dal 1916, l'ora legale in Italia inizia l'ultima domenica di marzo e termina l'ultima domenica di ottobre
+    function isDaylightSavings(year, month, day) {
+      if (month < 3 || month > 10) return false; // Gen-Feb, Nov-Dic: ora solare
+      if (month > 3 && month < 10) return true;  // Apr-Set: ora legale
+      
+      // Calcolo ultima domenica di marzo
+      if (month === 3) {
+        const lastSunday = new Date(year, 3, 0).getDate() - new Date(year, 3, 0).getDay();
+        return day >= lastSunday;
+      }
+      
+      // Calcolo ultima domenica di ottobre
+      if (month === 10) {
+        const lastSunday = new Date(year, 11, 0).getDate() - new Date(year, 11, 0).getDay();
+        return day < lastSunday;
+      }
+      
+      return false;
+    }
+    
+    // Determina il fuso orario
+    const isDST = isDaylightSavings(y, m, d);
+    const timezoneOffset = isDST ? 2 : 1; // CEST = UTC+2, CET = UTC+1
+    
+    console.log(`📅 Data: ${y}-${m}-${d}`);
+    console.log(`🕐 Ora legale: ${isDST ? 'SÌ (CEST UTC+2)' : 'NO (CET UTC+1)'}`);
+    console.log(`📍 Fuso orario: UTC+${timezoneOffset}`);
+    
+    // Converti ora locale in UT
+    let oraUt = h + min / 60 - timezoneOffset;
+    let giornoJD = d;
+    let meseJD = m;
+    let annoJD = y;
+    
+    // Gestisci il cambio di giorno
+    if (oraUt < 0) {
+      oraUt += 24;
+      giornoJD--;
+      
+      if (giornoJD < 1) {
+        const giorniMese = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+        const isLeap = (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
+        if (isLeap) giorniMese[1] = 29;
+        
+        meseJD--;
+        if (meseJD < 1) {
+          meseJD = 12;
+          annoJD--;
+        }
+        giornoJD = giorniMese[meseJD - 1];
+      }
+    }
+    
+    console.log(`📅 Ora italiana: ${h}:${min} (UTC+${timezoneOffset}) -> UT: ${oraUt.toFixed(6)}`);
+    console.log(`📅 Data UT: ${annoJD}-${meseJD}-${giornoJD}`);
+    
+    // Calcola Julian Day con l'ora UT corretta
+    const jd = swisseph.swe_julday(annoJD, meseJD, giornoJD, oraUt, swisseph.SE_GREG_CAL);
     const latNum = parseFloat(lat);
     const lonNum = parseFloat(lon);
     
-    console.log(`📆 JD: ${jd}`);
+    console.log(`📆 Julian Day (UT): ${jd.toFixed(8)}`);
     
     const segni = ['Ariete ♈', 'Toro ♉', 'Gemelli ♊', 'Cancro ♋', 'Leone ♌', 'Vergine ♍', 'Bilancia ♎', 'Scorpione ♏', 'Sagittario ♐', 'Capricorno ♑', 'Acquario ♒', 'Pesci ♓'];
     
@@ -86,6 +145,8 @@ app.post('/tema-natale', (req, res) => {
     const ascendenteLong = houses.ascmc ? houses.ascmc[0] : cuspidi[0];
     const medioCieloLong = houses.ascmc ? houses.ascmc[1] : cuspidi[9];
     
+    console.log(`📊 Ascendente: ${ascendenteLong.toFixed(4)}° -> ${segni[Math.floor(ascendenteLong / 30)]} ${(ascendenteLong % 30).toFixed(2)}°`);
+    
     const caseAstrologiche = {
       ascendente: getSegnoGrado(ascendenteLong),
       medioCielo: getSegnoGrado(medioCieloLong),
@@ -103,7 +164,7 @@ app.post('/tema-natale', (req, res) => {
         const result = swisseph.swe_calc_ut(jd, id, swisseph.SEFLG_SWIEPH | swisseph.SEFLG_SPEED);
         if (result && result.longitude !== undefined) {
           const long = result.longitude;
-          console.log(`✅ ${nome}: ${long}°`);
+          console.log(`✅ ${nome}: ${long.toFixed(4)}°`);
           return getSegnoGrado(long);
         }
       } catch(e) {
@@ -145,7 +206,7 @@ app.post('/tema-natale', (req, res) => {
     }
     
     // =======================
-    // 4. CALCOLO ASPETTI (semplificato)
+    // 4. CALCOLO ASPETTI
     // =======================
     const aspetti = [];
     
