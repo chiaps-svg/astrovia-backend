@@ -26,13 +26,36 @@ if (fs.existsSync('./ephe')) {
 const app = express();
 
 // =======================
-// 🔥 CONFIGURAZIONE CORS CORRETTA
+// 🔥 CONFIGURAZIONE CORS COMPLETA (FIX DEFINITIVO)
 // =======================
+// Opzione 1: Permetti tutto (per test) - più permissiva
 app.use(cors({
-  origin: ['http://localhost:8100', 'https://astrovia-backend-sfov.onrender.com'],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  credentials: false,
+  optionsSuccessStatus: 200
 }));
+
+// Opzione 2: Specifica gli origin (alternativa più sicura)
+// app.use(cors({
+//   origin: ['http://localhost:8100', 'http://localhost:4200', 'https://astrovia-backend-sfov.onrender.com'],
+//   methods: ['GET', 'POST', 'OPTIONS'],
+//   allowedHeaders: ['Content-Type', 'Authorization'],
+//   credentials: true,
+//   optionsSuccessStatus: 200
+// }));
+
+// Middleware aggiuntivo per gestire OPTIONS manualmente
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
 
 app.use(express.json());
 
@@ -50,7 +73,6 @@ function calcPlanet(jdUt, planet) {
   try {
     if (!planet && planet !== 0) return null;
 
-    // Usa swe_calc_ut che gestisce automaticamente la conversione UT -> TT
     const result = swisseph.swe_calc_ut(
       jdUt,
       planet,
@@ -108,7 +130,6 @@ function calcolaCase(jd, lat, lon) {
     
     const result = swisseph.swe_houses(jd, lat, lon, 'P');
     
-    // Ottieni le cuspidi delle case
     let cuspidi = result.house || result.cusps || result.houses;
     
     if (!cuspidi || cuspidi.length < 12) {
@@ -116,7 +137,6 @@ function calcolaCase(jd, lat, lon) {
       return null;
     }
     
-    // Usa ascmc per Ascendente e MC (metodo standard)
     let ascendenteLong = null;
     let medioCieloLong = null;
     
@@ -285,33 +305,26 @@ app.post('/tema-natale', (req, res) => {
     }
     
     // =======================
-    // 🔥 CONVERSIONE PRECISA DEL TEMPO (STANDARD SE)
+    // 🔥 CONVERSIONE PRECISA DEL TEMPO
     // =======================
     const [y, m, d] = data.split('-').map(Number);
     let [h, min] = ora.split(':').map(Number);
     let sec = 0;
     
-    // Fuso orario italiano: CET = +1 (sempre per date storiche)
-    // Per semplificare, usiamo +1. In futuro si può migliorare con ora legale
     const timezone = 1; // CET (Italia)
     
-    // Usa la funzione ufficiale per convertire ora locale in UTC
-    // Questa funzione gestisce correttamente i secondi intercalari
     const utc = swisseph.swe_utc_time_zone(y, m, d, h, min, sec, timezone);
     
     console.log(`📅 Ora locale: ${h}:${min} (UTC+${timezone})`);
     console.log(`📅 UTC calcolato: ${utc.year}-${utc.month}-${utc.day} ${utc.hour}:${utc.min}:${utc.sec}`);
     
-    // Converti UTC in Julian Day
     const jd = swisseph.swe_utc_to_jd(utc.year, utc.month, utc.day, utc.hour, utc.min, utc.sec, 1);
-    
-    // swe_utc_to_jd restituisce un array [jd_ut, jd_tt]
-    const jdUt = jd[0]; // Julian Day in UT (Universal Time)
+    const jdUt = jd[0];
     
     console.log(`📆 Julian Day (UT): ${jdUt}`);
 
     // =======================
-    // 🌟 PIANETI (calcolati con jdUt, swe_calc_ut gestisce TT internamente)
+    // 🌟 PIANETI
     // =======================
     const pianeti = {
       sole: getPlanetData(jdUt, swisseph.SE_SUN),
@@ -328,19 +341,8 @@ app.post('/tema-natale', (req, res) => {
       lilith: getPlanetData(jdUt, swisseph.SE_MEAN_APOG)
     };
 
-    // =======================
-    // 🏠 CASE ASTROLOGICHE
-    // =======================
     const caseAstrologiche = calcolaCase(jdUt, latitudine, longitudine);
-
-    // =======================
-    // 🔗 ASPETTI PLANETARI
-    // =======================
     const aspetti = calcolaAspetti(pianeti);
-
-    // =======================
-    // 🌙 NODI LUNARI
-    // =======================
     const nodiLunari = calcolaNodiLunari(jdUt);
 
     res.json({ 
