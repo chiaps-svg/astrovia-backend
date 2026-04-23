@@ -1,5 +1,4 @@
 const express = require('express');
-const cors = require('cors');
 const swisseph = require('swisseph');
 const fs = require('fs');
 
@@ -26,35 +25,43 @@ if (fs.existsSync('./ephe')) {
 const app = express();
 
 // =======================
-// 🔥 CONFIGURAZIONE CORS COMPLETA (FIX DEFINITIVO)
+// 🔥 MIDDLEWARE CORS PERSONALIZZATO (SOLUZIONE DEFINITIVA PER RENDER)
 // =======================
-// Opzione 1: Permetti tutto (per test) - più permissiva
-app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
-  credentials: false,
-  optionsSuccessStatus: 200
-}));
-
-// Opzione 2: Specifica gli origin (alternativa più sicura)
-// app.use(cors({
-//   origin: ['http://localhost:8100', 'http://localhost:4200', 'https://astrovia-backend-sfov.onrender.com'],
-//   methods: ['GET', 'POST', 'OPTIONS'],
-//   allowedHeaders: ['Content-Type', 'Authorization'],
-//   credentials: true,
-//   optionsSuccessStatus: 200
-// }));
-
-// Middleware aggiuntivo per gestire OPTIONS manualmente
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
-  }
-  next();
+    // 1. Lista degli indirizzi permessi
+    const allowedOrigins = [
+        'http://localhost:8100',
+        'http://localhost:4200',
+        'https://astrovia-backend-sfov.onrender.com'
+    ];
+
+    // 2. Prende l'origine della richiesta dal browser
+    const origin = req.headers.origin;
+
+    // 3. Se l'origine è nella lista, la autorizza
+    if (allowedOrigins.includes(origin)) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+    } else {
+        // In alternativa, autorizza tutte (per test)
+        res.setHeader('Access-Control-Allow-Origin', '*');
+    }
+
+    // 4. Autorizza i metodi HTTP
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+    
+    // 5. Autorizza gli header
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
+    
+    // 6. Permetti l'invio di cookie/seessioni (se necessario)
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+
+    // 7. Gestisce la richiesta preflight OPTIONS
+    if (req.method === 'OPTIONS') {
+        return res.sendStatus(200);
+    }
+
+    // 8. Passa il controllo alla rotta successiva
+    next();
 });
 
 app.use(express.json());
