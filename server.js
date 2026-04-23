@@ -107,10 +107,12 @@ app.post('/tema-natale', (req, res) => {
     
     // Calcola l'ora UT sottraendo 1 ora (per l'Italia CET)
     let oraUt = h + min / 60 - 1;
+    console.log(`🔍 Verifica: ora italiana ${h}:${min} -> UT=${oraUt.toFixed(6)}`);
     let giornoJD = d;
     let meseJD = m;
     let annoJD = y;
-    
+
+        
     // Gestisci il cambio di giorno
     if (oraUt < 0) {
       oraUt += 24;
