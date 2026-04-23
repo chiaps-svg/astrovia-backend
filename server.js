@@ -74,6 +74,13 @@ app.get('/', (req, res) => {
 });
 
 // =======================
+// 🏓 ENDPOINT PER IL PING (KEEP ALIVE)
+// =======================
+app.get('/ping', (req, res) => {
+  res.send('OK');
+});
+
+// =======================
 // 🔧 SAFE CALC - ALTA PRECISIONE
 // =======================
 function calcPlanet(jdUt, planet) {
