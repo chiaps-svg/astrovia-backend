@@ -110,14 +110,20 @@ function calcolaAspetti(pianeti) {
 }
 
 // =======================
-// 🔧 CALCOLO PRECISO - METODO UFFICIALE (Delta T + swe_calc)
+// 🔧 CALCOLO PRECISO - METODO UFFICIALE CON CORREZIONE DELTA T
 // =======================
 function calcPlanet(id, nome, jdUt) {
   try {
     if (!id && id !== 0) return null;
     
     // 1. CALCOLA IL DELTA T (differenza tra UT e TT)
-    const deltaT = swisseph.swe_deltat(jdUt);
+    let deltaT = swisseph.swe_deltat(jdUt);
+    
+    // 🔥 CORREZIONE: swe_deltat può restituire un oggetto
+    if (typeof deltaT === 'object' && deltaT !== null) {
+        deltaT = deltaT.delta_t || deltaT.deltat || 0;
+    }
+    
     console.log(`📐 Delta T per ${nome}: ${deltaT} giorni`);
     
     // 2. OTTIENI IL JULIAN DAY IN TEMPO DINAMICO (TT)
@@ -141,8 +147,10 @@ function calcPlanet(id, nome, jdUt) {
       longitudine = result[0];
     }
     
-    if (longitudine !== null) {
+    if (longitudine !== null && !isNaN(longitudine)) {
       console.log(`✅ ${nome}: ${longitudine.toFixed(4)}° (TT)`);
+    } else {
+      console.log(`⚠️ ${nome}: longitudine non valida`);
     }
     
     return longitudine;
@@ -243,7 +251,7 @@ app.post('/tema-natale', (req, res) => {
     };
     
     // =======================
-    // 2. CALCOLO PIANETI (USANDO IL NUOVO METODO)
+    // 2. CALCOLO PIANETI (USANDO LA FUNZIONE CORRETTA)
     // =======================
     const pianeti = {
       sole: getSegnoGrado(calcPlanet(swisseph.SE_SUN, 'Sole', jdUt)),
@@ -266,7 +274,7 @@ app.post('/tema-natale', (req, res) => {
     let nodiLunari = null;
     try {
       const nodoNordLong = calcPlanet(11, 'Nodo Nord', jdUt);
-      if (nodoNordLong !== null) {
+      if (nodoNordLong !== null && !isNaN(nodoNordLong)) {
         nodiLunari = {
           nodoNord: getSegnoGrado(nodoNordLong),
           nodoSud: getSegnoGrado((nodoNordLong + 180) % 360)
