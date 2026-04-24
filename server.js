@@ -162,10 +162,19 @@ function calcPlanet(id, nome, jdUt) {
 }
 
 // =======================
-// 🌌 API - CONVERSIONE MANUALE PRECISA
+// 📍 FUNZIONE PER CALCOLARE L'ASCENDENTE
+// =======================
+function calcolaAscendente(jdUt, latNum, lonNum) {
+  const houses = swisseph.swe_houses(jdUt, latNum, lonNum, 'P');
+  const ascendenteLong = houses.ascmc ? houses.ascmc[0] : houses.house[0];
+  return ascendenteLong;
+}
+
+// =======================
+// 🌌 API - TEMA NATALE
 // =======================
 app.post('/tema-natale', (req, res) => {
-  console.log('\n🔥 RICHIESTA RICEVUTA');
+  console.log('\n🔥 RICHIESTA TEMA NATALE');
   
   try {
     const { data, ora, lat, lon } = req.body;
@@ -177,19 +186,16 @@ app.post('/tema-natale', (req, res) => {
 
     // =======================
     // 🔥 CONVERSIONE ORA ITALIANA -> UT
-    // Per l'Italia: CET = UTC+1 (sottrai 1 ora)
     // =======================
     const [y, m, d] = data.split('-').map(Number);
     let [h, min] = ora.split(':').map(Number);
     
-    // Calcola l'ora UT sottraendo 1 ora (per l'Italia CET)
     let oraUt = h + min / 60 - 1;
     console.log(`🔍 Verifica: ora italiana ${h}:${min} -> UT=${oraUt.toFixed(6)}`);
     let giornoJD = d;
     let meseJD = m;
     let annoJD = y;
     
-    // Gestisci il cambio di giorno
     if (oraUt < 0) {
       oraUt += 24;
       giornoJD--;
@@ -211,7 +217,6 @@ app.post('/tema-natale', (req, res) => {
     console.log(`📅 Ora italiana: ${h}:${min} (CET UTC+1) -> UT: ${oraUt.toFixed(6)}`);
     console.log(`📅 Data UT: ${annoJD}-${meseJD}-${giornoJD}`);
     
-    // Calcola Julian Day in UT
     const jdUt = swisseph.swe_julday(annoJD, meseJD, giornoJD, oraUt, swisseph.SE_GREG_CAL);
     const latNum = parseFloat(lat);
     const lonNum = parseFloat(lon);
@@ -231,9 +236,7 @@ app.post('/tema-natale', (req, res) => {
       };
     }
     
-    // =======================
-    // 1. CALCOLO CASE E CARDINI
-    // =======================
+    // CALCOLO CASE E CARDINI
     const houses = swisseph.swe_houses(jdUt, latNum, lonNum, 'P');
     const cuspidi = houses.house;
     const ascendenteLong = houses.ascmc ? houses.ascmc[0] : cuspidi[0];
@@ -250,9 +253,7 @@ app.post('/tema-natale', (req, res) => {
       sistema: 'Placido'
     };
     
-    // =======================
-    // 2. CALCOLO PIANETI (USANDO LA FUNZIONE CORRETTA)
-    // =======================
+    // CALCOLO PIANETI
     const pianeti = {
       sole: getSegnoGrado(calcPlanet(swisseph.SE_SUN, 'Sole', jdUt)),
       luna: getSegnoGrado(calcPlanet(swisseph.SE_MOON, 'Luna', jdUt)),
@@ -268,9 +269,7 @@ app.post('/tema-natale', (req, res) => {
       lilith: getSegnoGrado(calcPlanet(swisseph.SE_MEAN_APOG, 'Lilith', jdUt))
     };
     
-    // =======================
-    // 3. CALCOLO NODI LUNARI
-    // =======================
+    // CALCOLO NODI LUNARI
     let nodiLunari = null;
     try {
       const nodoNordLong = calcPlanet(11, 'Nodo Nord', jdUt);
@@ -284,9 +283,7 @@ app.post('/tema-natale', (req, res) => {
       console.log('❌ Nodi Lunari: errore');
     }
     
-    // =======================
-    // 4. CALCOLO ASPETTI
-    // =======================
+    // CALCOLO ASPETTI
     const aspetti = calcolaAspetti(pianeti);
     console.log(`🔗 Trovati ${aspetti.length} aspetti planetari`);
     
@@ -303,6 +300,74 @@ app.post('/tema-natale', (req, res) => {
   } catch (err) {
     console.error('❌ ERRORE GENERALE:', err.message);
     console.error(err.stack);
+    res.status(500).json({ errore: err.message || 'Errore server' });
+  }
+});
+
+// =======================
+// 🌟 API - ASCENDENTE
+// =======================
+app.post('/ascendente', (req, res) => {
+  console.log('\n🔥 RICHIESTA ASCENDENTE');
+  
+  try {
+    const { data, ora, lat, lon } = req.body;
+    console.log(`📥 ${data} ${ora} ${lat} ${lon}`);
+
+    if (!data || !ora || !lat || !lon) {
+      return res.status(400).json({ errore: 'Parametri mancanti' });
+    }
+
+    // CONVERSIONE ORA ITALIANA -> UT
+    const [y, m, d] = data.split('-').map(Number);
+    let [h, min] = ora.split(':').map(Number);
+    
+    let oraUt = h + min / 60 - 1;
+    let giornoJD = d;
+    let meseJD = m;
+    let annoJD = y;
+    
+    if (oraUt < 0) {
+      oraUt += 24;
+      giornoJD--;
+      
+      if (giornoJD < 1) {
+        const giorniMese = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+        const isLeap = (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
+        if (isLeap) giorniMese[1] = 29;
+        
+        meseJD--;
+        if (meseJD < 1) {
+          meseJD = 12;
+          annoJD--;
+        }
+        giornoJD = giorniMese[meseJD - 1];
+      }
+    }
+    
+    const jdUt = swisseph.swe_julday(annoJD, meseJD, giornoJD, oraUt, swisseph.SE_GREG_CAL);
+    const latNum = parseFloat(lat);
+    const lonNum = parseFloat(lon);
+    
+    console.log(`📆 Julian Day (UT): ${jdUt.toFixed(8)}`);
+    
+    // CALCOLO ASCENDENTE
+    const ascendenteLong = calcolaAscendente(jdUt, latNum, lonNum);
+    
+    const segni = ['Ariete', 'Toro', 'Gemelli', 'Cancro', 'Leone', 'Vergine', 'Bilancia', 'Scorpione', 'Sagittario', 'Capricorno', 'Acquario', 'Pesci'];
+    const segnoIndex = Math.floor(ascendenteLong / 30);
+    const grado = (ascendenteLong % 30).toFixed(2);
+    
+    console.log(`📊 Ascendente calcolato: ${ascendenteLong.toFixed(4)}° -> ${segni[segnoIndex]} ${grado}°`);
+    
+    res.json({ 
+      segno: segni[segnoIndex],
+      grado: grado,
+      longitudine: ascendenteLong
+    });
+    
+  } catch (err) {
+    console.error('❌ ERRORE ASCENDENTE:', err.message);
     res.status(500).json({ errore: err.message || 'Errore server' });
   }
 });
