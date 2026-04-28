@@ -562,7 +562,6 @@ app.post('/transiti', (req, res) => {
       return res.status(400).json({ errore: 'Parametri mancanti' });
     }
 
-    // CONVERSIONE ORA ITALIANA -> UT per la data di nascita
     const [y, m, d] = data.split('-').map(Number);
     let [h, min] = ora.split(':').map(Number);
     
@@ -593,12 +592,10 @@ app.post('/transiti', (req, res) => {
     const latNum = parseFloat(lat);
     const lonNum = parseFloat(lon);
     
-    // CONVERSIONE DATA TRANSITO (mezzogiorno)
     const [y2, m2, d2] = dataTransito.split('-').map(Number);
     const oraTransitoUt = 12;
     const jdUtTransito = swisseph.swe_julday(y2, m2, d2, oraTransitoUt, swisseph.SE_GREG_CAL);
     
-    // CALCOLO POSIZIONI PIANETI AL MOMENTO DEL TRANSITO
     function getPosizionePianeta(id, jdUt) {
       let deltaT = swisseph.swe_deltat(jdUt);
       if (typeof deltaT === 'object' && deltaT !== null) {
@@ -609,7 +606,6 @@ app.post('/transiti', (req, res) => {
       return result ? result.longitude : null;
     }
     
-    // CALCOLO POSIZIONI DEI PIANETI DEL TEMA NATALE
     const pianetiNatali = {
       sole: calcPlanet(swisseph.SE_SUN, 'Sole', jdUtNascita),
       luna: calcPlanet(swisseph.SE_MOON, 'Luna', jdUtNascita),
@@ -623,7 +619,6 @@ app.post('/transiti', (req, res) => {
       plutone: calcPlanet(swisseph.SE_PLUTO, 'Plutone', jdUtNascita)
     };
     
-    // CALCOLO POSIZIONI DEI PIANETI DEL GIORNO DEL TRANSITO
     const pianetiTransito = {
       sole: getPosizionePianeta(swisseph.SE_SUN, jdUtTransito),
       luna: getPosizionePianeta(swisseph.SE_MOON, jdUtTransito),
@@ -637,7 +632,6 @@ app.post('/transiti', (req, res) => {
       plutone: getPosizionePianeta(swisseph.SE_PLUTO, jdUtTransito)
     };
     
-    // CALCOLO ASPETTI DI TRANSITO
     const segni = ['Ariete', 'Toro', 'Gemelli', 'Cancro', 'Leone', 'Vergine', 'Bilancia', 'Scorpione', 'Sagittario', 'Capricorno', 'Acquario', 'Pesci'];
     const aspettiTransito = [];
     
@@ -691,10 +685,8 @@ app.post('/transiti', (req, res) => {
       }
     }
     
-    // Ordina per orb (più stretto prima)
     aspettiTransito.sort((a, b) => parseFloat(a.orb) - parseFloat(b.orb));
     
-    // Genera descrizioni tecniche
     const aspettiFinali = aspettiTransito.slice(0, 15).map(a => {
       let descrizione = '';
       if (a.aspetto === 'Congiunzione') {
@@ -720,6 +712,188 @@ app.post('/transiti', (req, res) => {
     
   } catch (err) {
     console.error('❌ ERRORE TRANSITI:', err.message);
+    res.status(500).json({ errore: err.message || 'Errore server' });
+  }
+});
+
+// =======================
+// 💞 API - COMPATIBILITÀ
+// =======================
+app.post('/compatibilita', (req, res) => {
+  console.log('\n🔥 RICHIESTA COMPATIBILITÀ');
+  
+  try {
+    const { personaA, personaB } = req.body;
+    console.log(`📥 Persona A: ${JSON.stringify(personaA)}`);
+    console.log(`📥 Persona B: ${JSON.stringify(personaB)}`);
+
+    if (!personaA || !personaB) {
+      return res.status(400).json({ errore: 'Parametri mancanti' });
+    }
+
+    // Funzione per calcolare i pianeti di una persona
+    function calcolaPianetiPersona(data, ora, lat, lon) {
+      const [y, m, d] = data.split('-').map(Number);
+      let [h, min] = ora.split(':').map(Number);
+      
+      let oraUt = h + min / 60 - 1;
+      let giornoJD = d;
+      let meseJD = m;
+      let annoJD = y;
+      
+      if (oraUt < 0) {
+        oraUt += 24;
+        giornoJD--;
+        
+        if (giornoJD < 1) {
+          const giorniMese = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+          const isLeap = (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
+          if (isLeap) giorniMese[1] = 29;
+          
+          meseJD--;
+          if (meseJD < 1) {
+            meseJD = 12;
+            annoJD--;
+          }
+          giornoJD = giorniMese[meseJD - 1];
+        }
+      }
+      
+      const jdUt = swisseph.swe_julday(annoJD, meseJD, giornoJD, oraUt, swisseph.SE_GREG_CAL);
+      const latNum = parseFloat(lat);
+      const lonNum = parseFloat(lon);
+      
+      const houses = swisseph.swe_houses(jdUt, latNum, lonNum, 'P');
+      const ascendenteLong = houses.ascmc ? houses.ascmc[0] : houses.house[0];
+      
+      const pianeti = {
+        sole: calcPlanet(swisseph.SE_SUN, 'Sole', jdUt),
+        luna: calcPlanet(swisseph.SE_MOON, 'Luna', jdUt),
+        mercurio: calcPlanet(swisseph.SE_MERCURY, 'Mercurio', jdUt),
+        venere: calcPlanet(swisseph.SE_VENUS, 'Venere', jdUt),
+        marte: calcPlanet(swisseph.SE_MARS, 'Marte', jdUt),
+        giove: calcPlanet(swisseph.SE_JUPITER, 'Giove', jdUt),
+        saturno: calcPlanet(swisseph.SE_SATURN, 'Saturno', jdUt),
+        urano: calcPlanet(swisseph.SE_URANUS, 'Urano', jdUt),
+        nettuno: calcPlanet(swisseph.SE_NEPTUNE, 'Nettuno', jdUt),
+        plutone: calcPlanet(swisseph.SE_PLUTO, 'Plutone', jdUt)
+      };
+      
+      return { pianeti, ascendenteLong };
+    }
+    
+    // Calcola i pianeti per entrambe le persone
+    const personaAData = calcolaPianetiPersona(personaA.data, personaA.ora, personaA.lat, personaA.lon);
+    const personaBData = calcolaPianetiPersona(personaB.data, personaB.ora, personaB.lat, personaB.lon);
+    
+    const pianetiA = personaAData.pianeti;
+    const pianetiB = personaBData.pianeti;
+    
+    // Calcola aspetti tra i pianeti delle due persone
+    const segni = ['Ariete', 'Toro', 'Gemelli', 'Cancro', 'Leone', 'Vergine', 'Bilancia', 'Scorpione', 'Sagittario', 'Capricorno', 'Acquario', 'Pesci'];
+    const aspettiCompatibilita = [];
+    
+    for (const [nomeA, longA] of Object.entries(pianetiA)) {
+      for (const [nomeB, longB] of Object.entries(pianetiB)) {
+        if (longA === null || longB === null) continue;
+        
+        let diff = Math.abs(longA - longB);
+        if (diff > 180) diff = 360 - diff;
+        
+        let aspetto = null;
+        let orb = null;
+        
+        if (diff < 8) {
+          aspetto = 'Congiunzione';
+          orb = diff.toFixed(2);
+        } else if (Math.abs(diff - 60) < 6) {
+          aspetto = 'Sestile';
+          orb = Math.abs(diff - 60).toFixed(2);
+        } else if (Math.abs(diff - 90) < 8) {
+          aspetto = 'Quadrato';
+          orb = Math.abs(diff - 90).toFixed(2);
+        } else if (Math.abs(diff - 120) < 8) {
+          aspetto = 'Trigono';
+          orb = Math.abs(diff - 120).toFixed(2);
+        } else if (Math.abs(diff - 180) < 8) {
+          aspetto = 'Opposizione';
+          orb = Math.abs(diff - 180).toFixed(2);
+        }
+        
+        if (aspetto) {
+          const segnoA = segni[Math.floor(longA / 30)];
+          const segnoB = segni[Math.floor(longB / 30)];
+          
+          let descrizione = '';
+          if (aspetto === 'Congiunzione') {
+            descrizione = `${nomeA} e ${nomeB} si uniscono, creando una forte connessione energetica.`;
+          } else if (aspetto === 'Sestile') {
+            descrizione = `Opportunità di collaborazione e supporto reciproco.`;
+          } else if (aspetto === 'Quadrato') {
+            descrizione = `Tensione costruttiva: le differenze possono diventare un motore di crescita.`;
+          } else if (aspetto === 'Trigono') {
+            descrizione = `Armonia naturale: i vostri pianeti danzano insieme senza sforzo.`;
+          } else if (aspetto === 'Opposizione') {
+            descrizione = `Attrazione degli opposti: potete completarvi a vicenda.`;
+          }
+          
+          aspettiCompatibilita.push({
+            pianetaA: nomeA,
+            pianetaB: nomeB,
+            aspetto: aspetto,
+            orb: orb,
+            segnoA: segnoA,
+            segnoB: segnoB,
+            descrizione: descrizione
+          });
+        }
+      }
+    }
+    
+    // Ordina per orb (più stretto prima)
+    aspettiCompatibilita.sort((a, b) => parseFloat(a.orb) - parseFloat(b.orb));
+    
+    // Calcolo punteggio semplice
+    let punteggio = 0;
+    for (const a of aspettiCompatibilita) {
+      if (a.aspetto === 'Trigono' || a.aspetto === 'Sestile') punteggio += 10;
+      if (a.aspetto === 'Congiunzione') punteggio += 5;
+      if (a.aspetto === 'Opposizione') punteggio += 3;
+      if (a.aspetto === 'Quadrato') punteggio += 2;
+      punteggio += Math.max(0, 8 - parseFloat(a.orb));
+    }
+    punteggio = Math.min(100, Math.round(punteggio));
+    
+    // Riepilogo
+    let riepilogo = '';
+    if (punteggio >= 70) {
+      riepilogo = '🌟 Compatibilità eccellente! C\'è una forte armonia naturale tra di voi. I pianeti danzano insieme, favorendo comprensione e sostegno reciproco.';
+    } else if (punteggio >= 50) {
+      riepilogo = '💫 Buona compatibilità. Ci sono molti aspetti armonici, ma anche qualche tensione costruttiva che può aiutarvi a crescere insieme.';
+    } else if (punteggio >= 30) {
+      riepilogo = '🌙 Compatibilità nella media. Il vostro rapporto richiede impegno e comunicazione, ma le potenzialità ci sono.';
+    } else {
+      riepilogo = '🌊 Compatibilità complessa. Molti aspetti di tensione: il vostro è un rapporto che può essere stimolante ma anche impegnativo.';
+    }
+    
+    // Aggiungi anche l'Ascendente di ciascuno per info extra
+    const ascendenteASegno = segni[Math.floor(personaAData.ascendenteLong / 30)];
+    const ascendenteAGrado = (personaAData.ascendenteLong % 30).toFixed(2);
+    const ascendenteBSegno = segni[Math.floor(personaBData.ascendenteLong / 30)];
+    const ascendenteBGrado = (personaBData.ascendenteLong % 30).toFixed(2);
+    
+    console.log(`🔗 Trovati ${aspettiCompatibilita.length} aspetti di compatibilità`);
+    
+    res.json({
+      aspetti: aspettiCompatibilita.slice(0, 20),
+      punteggio: punteggio,
+      riepilogo: riepilogo,
+      ascendenteA: { segno: ascendenteASegno, grado: ascendenteAGrado },
+      ascendenteB: { segno: ascendenteBSegno, grado: ascendenteBGrado }
+    });
+    
+  } catch (err) {
+    console.error('❌ ERRORE COMPATIBILITÀ:', err.message);
     res.status(500).json({ errore: err.message || 'Errore server' });
   }
 });
