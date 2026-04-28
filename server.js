@@ -13,7 +13,6 @@ try {
   console.log('✅ File frasi-previsioni.js caricato');
 } catch(e) {
   console.log('⚠️ File frasi-previsioni.js non trovato, uso frasi di default');
-  // Fallback: crea oggetti vuoti
   frasiAspetti = {};
   consigliPositivi = ["✨ Le stelle oggi sono allineate per te."];
   consigliNegativi = ["⚠️ Giornata potenzialmente complessa."];
@@ -164,15 +163,30 @@ function calcolaAscendente(jdUt, latNum, lonNum) {
 }
 
 // =======================
-// 🔮 FUNZIONE PER GENERARE TESTO ASPETTO
+// 🔮 FUNZIONE PER GENERARE TESTO ASPETTO (SENZA RIPETIZIONI)
 // =======================
+const frasiUsateNelProfilo = [];
+
 function generaTestoAspetto(aspetto, pianetaNatale, segnoNatale, pianetaTransito, segnoTransito) {
   const categoria = frasiAspetti[aspetto] || frasiAspetti['Sestile'] || {};
   const listaFrasi = categoria[pianetaNatale] || categoria['default'] || [
     "{pianetaNatale} in {segnoNatale} è in {aspetto} con {pianetaTransito} in {segnoTransito}."
   ];
   
-  const template = listaFrasi[Math.floor(Math.random() * listaFrasi.length)];
+  // Filtra le frasi già usate in questo profilo
+  let frasiDisponibili = listaFrasi.filter(f => !frasiUsateNelProfilo.includes(f));
+  
+  // Se tutte le frasi sono già state usate, ricomincia da capo
+  if (frasiDisponibili.length === 0) {
+    frasiDisponibili = [...listaFrasi];
+    frasiUsateNelProfilo.length = 0; // Resetta per evitare loop infinito
+  }
+  
+  // Scegli una frase casuale tra quelle disponibili
+  const template = frasiDisponibili[Math.floor(Math.random() * frasiDisponibili.length)];
+  
+  // Aggiungi la frase usata alla lista delle già usate
+  frasiUsateNelProfilo.push(template);
   
   return template
     .replace(/{pianetaNatale}/g, pianetaNatale.charAt(0).toUpperCase() + pianetaNatale.slice(1))
@@ -363,6 +377,9 @@ app.post('/ascendente', (req, res) => {
 app.post('/previsioni', (req, res) => {
   console.log('\n🔥 RICHIESTA PREVISIONI');
   
+  // Resetta la lista delle frasi usate per ogni nuovo profilo
+  frasiUsateNelProfilo.length = 0;
+  
   try {
     const { data, ora, lat, lon, dataPrevisione } = req.body;
     console.log(`📥 Nascita: ${data} ${ora} ${lat} ${lon}`);
@@ -496,7 +513,7 @@ app.post('/previsioni', (req, res) => {
       }
     }
     
-    // GENERAZIONE TESTO PREVISIONI CON FRASI PROFESSIONALI
+    // GENERAZIONE TESTO PREVISIONI CON FRASI PROFESSIONALI (SENZA RIPETIZIONI)
     const segni = ['Ariete', 'Toro', 'Gemelli', 'Cancro', 'Leone', 'Vergine', 'Bilancia', 'Scorpione', 'Sagittario', 'Capricorno', 'Acquario', 'Pesci'];
     
     const aspettiTesto = [];
@@ -504,7 +521,7 @@ app.post('/previsioni', (req, res) => {
       const segnoNatale = segni[Math.floor(pianetiNatali[a.pianetaNatale] / 30)];
       const segnoTransito = segni[Math.floor(pianetiPrevisione[a.pianetaTransito] / 30)];
       
-      // Usa la funzione professionale con le frasi estratte dal file
+      // Usa la funzione professionale che evita ripetizioni
       const testo = generaTestoAspetto(
         a.aspetto,
         a.pianetaNatale,
