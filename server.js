@@ -173,19 +173,14 @@ function generaTestoAspetto(aspetto, pianetaNatale, segnoNatale, pianetaTransito
     "{pianetaNatale} in {segnoNatale} è in {aspetto} con {pianetaTransito} in {segnoTransito}."
   ];
   
-  // Filtra le frasi già usate in questo profilo
   let frasiDisponibili = listaFrasi.filter(f => !frasiUsateNelProfilo.includes(f));
   
-  // Se tutte le frasi sono già state usate, ricomincia da capo
   if (frasiDisponibili.length === 0) {
     frasiDisponibili = [...listaFrasi];
-    frasiUsateNelProfilo.length = 0; // Resetta per evitare loop infinito
+    frasiUsateNelProfilo.length = 0;
   }
   
-  // Scegli una frase casuale tra quelle disponibili
   const template = frasiDisponibili[Math.floor(Math.random() * frasiDisponibili.length)];
-  
-  // Aggiungi la frase usata alla lista delle già usate
   frasiUsateNelProfilo.push(template);
   
   return template
@@ -377,7 +372,6 @@ app.post('/ascendente', (req, res) => {
 app.post('/previsioni', (req, res) => {
   console.log('\n🔥 RICHIESTA PREVISIONI');
   
-  // Resetta la lista delle frasi usate per ogni nuovo profilo
   frasiUsateNelProfilo.length = 0;
   
   try {
@@ -389,7 +383,6 @@ app.post('/previsioni', (req, res) => {
       return res.status(400).json({ errore: 'Parametri mancanti' });
     }
 
-    // CONVERSIONE ORA ITALIANA -> UT per la data di nascita
     const [y, m, d] = data.split('-').map(Number);
     let [h, min] = ora.split(':').map(Number);
     
@@ -420,13 +413,11 @@ app.post('/previsioni', (req, res) => {
     const latNum = parseFloat(lat);
     const lonNum = parseFloat(lon);
     
-    // CONVERSIONE DATA PREVISIONE (mezzogiorno)
     const [y2, m2, d2] = dataPrevisione.split('T')[0].split('-').map(Number);
     const oraPrevisioneUt = 12;
     const jdUtPrevisione = swisseph.swe_julday(y2, m2, d2, oraPrevisioneUt, swisseph.SE_GREG_CAL);
     
-    // CALCOLO POSIZIONI PIANETI AL MOMENTO DELLA PREVISIONE
-    function getPosizionePianeta(id, nome, jdUt) {
+    function getPosizionePianeta(id, jdUt) {
       let deltaT = swisseph.swe_deltat(jdUt);
       if (typeof deltaT === 'object' && deltaT !== null) {
         deltaT = deltaT.delta_t || deltaT.deltat || 0;
@@ -436,7 +427,6 @@ app.post('/previsioni', (req, res) => {
       return result ? result.longitude : null;
     }
     
-    // CALCOLO POSIZIONI DEI PIANETI DEL TEMA NATALE
     const pianetiNatali = {
       sole: calcPlanet(swisseph.SE_SUN, 'Sole', jdUtNascita),
       luna: calcPlanet(swisseph.SE_MOON, 'Luna', jdUtNascita),
@@ -450,21 +440,19 @@ app.post('/previsioni', (req, res) => {
       plutone: calcPlanet(swisseph.SE_PLUTO, 'Plutone', jdUtNascita)
     };
     
-    // CALCOLO POSIZIONI DEI PIANETI DEL GIORNO DELLA PREVISIONE
     const pianetiPrevisione = {
-      sole: getPosizionePianeta(swisseph.SE_SUN, 'Sole', jdUtPrevisione),
-      luna: getPosizionePianeta(swisseph.SE_MOON, 'Luna', jdUtPrevisione),
-      mercurio: getPosizionePianeta(swisseph.SE_MERCURY, 'Mercurio', jdUtPrevisione),
-      venere: getPosizionePianeta(swisseph.SE_VENUS, 'Venere', jdUtPrevisione),
-      marte: getPosizionePianeta(swisseph.SE_MARS, 'Marte', jdUtPrevisione),
-      giove: getPosizionePianeta(swisseph.SE_JUPITER, 'Giove', jdUtPrevisione),
-      saturno: getPosizionePianeta(swisseph.SE_SATURN, 'Saturno', jdUtPrevisione),
-      urano: getPosizionePianeta(swisseph.SE_URANUS, 'Urano', jdUtPrevisione),
-      nettuno: getPosizionePianeta(swisseph.SE_NEPTUNE, 'Nettuno', jdUtPrevisione),
-      plutone: getPosizionePianeta(swisseph.SE_PLUTO, 'Plutone', jdUtPrevisione)
+      sole: getPosizionePianeta(swisseph.SE_SUN, jdUtPrevisione),
+      luna: getPosizionePianeta(swisseph.SE_MOON, jdUtPrevisione),
+      mercurio: getPosizionePianeta(swisseph.SE_MERCURY, jdUtPrevisione),
+      venere: getPosizionePianeta(swisseph.SE_VENUS, jdUtPrevisione),
+      marte: getPosizionePianeta(swisseph.SE_MARS, jdUtPrevisione),
+      giove: getPosizionePianeta(swisseph.SE_JUPITER, jdUtPrevisione),
+      saturno: getPosizionePianeta(swisseph.SE_SATURN, jdUtPrevisione),
+      urano: getPosizionePianeta(swisseph.SE_URANUS, jdUtPrevisione),
+      nettuno: getPosizionePianeta(swisseph.SE_NEPTUNE, jdUtPrevisione),
+      plutone: getPosizionePianeta(swisseph.SE_PLUTO, jdUtPrevisione)
     };
     
-    // CALCOLO ASPETTI TRA NATALE E PREVISIONE
     const aspettiPrevisioni = [];
     
     for (const [nomeNatale, longNatale] of Object.entries(pianetiNatali)) {
@@ -513,7 +501,6 @@ app.post('/previsioni', (req, res) => {
       }
     }
     
-    // GENERAZIONE TESTO PREVISIONI CON FRASI PROFESSIONALI (SENZA RIPETIZIONI)
     const segni = ['Ariete', 'Toro', 'Gemelli', 'Cancro', 'Leone', 'Vergine', 'Bilancia', 'Scorpione', 'Sagittario', 'Capricorno', 'Acquario', 'Pesci'];
     
     const aspettiTesto = [];
@@ -521,7 +508,6 @@ app.post('/previsioni', (req, res) => {
       const segnoNatale = segni[Math.floor(pianetiNatali[a.pianetaNatale] / 30)];
       const segnoTransito = segni[Math.floor(pianetiPrevisione[a.pianetaTransito] / 30)];
       
-      // Usa la funzione professionale che evita ripetizioni
       const testo = generaTestoAspetto(
         a.aspetto,
         a.pianetaNatale,
@@ -533,10 +519,8 @@ app.post('/previsioni', (req, res) => {
       aspettiTesto.push({ testo: testo });
     }
     
-    // Scegli massimo 5 aspetti per non sovraccaricare
     const aspettiFinali = aspettiTesto.slice(0, 5);
     
-    // GENERAZIONE CONSIGLIO
     const aspettiPositivi = aspettiPrevisioni.filter(a => a.aspetto === 'Trigono' || a.aspetto === 'Sestile');
     const aspettiNegativi = aspettiPrevisioni.filter(a => a.aspetto === 'Quadrato' || a.aspetto === 'Opposizione');
     
@@ -559,6 +543,183 @@ app.post('/previsioni', (req, res) => {
     
   } catch (err) {
     console.error('❌ ERRORE PREVISIONI:', err.message);
+    res.status(500).json({ errore: err.message || 'Errore server' });
+  }
+});
+
+// =======================
+// 🪐 API - TRANSITI
+// =======================
+app.post('/transiti', (req, res) => {
+  console.log('\n🔥 RICHIESTA TRANSITI');
+  
+  try {
+    const { data, ora, lat, lon, dataTransito } = req.body;
+    console.log(`📥 Nascita: ${data} ${ora} ${lat} ${lon}`);
+    console.log(`📥 Data transito: ${dataTransito}`);
+
+    if (!data || !ora || !lat || !lon || !dataTransito) {
+      return res.status(400).json({ errore: 'Parametri mancanti' });
+    }
+
+    // CONVERSIONE ORA ITALIANA -> UT per la data di nascita
+    const [y, m, d] = data.split('-').map(Number);
+    let [h, min] = ora.split(':').map(Number);
+    
+    let oraUt = h + min / 60 - 1;
+    let giornoJD = d;
+    let meseJD = m;
+    let annoJD = y;
+    
+    if (oraUt < 0) {
+      oraUt += 24;
+      giornoJD--;
+      
+      if (giornoJD < 1) {
+        const giorniMese = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+        const isLeap = (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
+        if (isLeap) giorniMese[1] = 29;
+        
+        meseJD--;
+        if (meseJD < 1) {
+          meseJD = 12;
+          annoJD--;
+        }
+        giornoJD = giorniMese[meseJD - 1];
+      }
+    }
+    
+    const jdUtNascita = swisseph.swe_julday(annoJD, meseJD, giornoJD, oraUt, swisseph.SE_GREG_CAL);
+    const latNum = parseFloat(lat);
+    const lonNum = parseFloat(lon);
+    
+    // CONVERSIONE DATA TRANSITO (mezzogiorno)
+    const [y2, m2, d2] = dataTransito.split('-').map(Number);
+    const oraTransitoUt = 12;
+    const jdUtTransito = swisseph.swe_julday(y2, m2, d2, oraTransitoUt, swisseph.SE_GREG_CAL);
+    
+    // CALCOLO POSIZIONI PIANETI AL MOMENTO DEL TRANSITO
+    function getPosizionePianeta(id, jdUt) {
+      let deltaT = swisseph.swe_deltat(jdUt);
+      if (typeof deltaT === 'object' && deltaT !== null) {
+        deltaT = deltaT.delta_t || deltaT.deltat || 0;
+      }
+      const jdTT = jdUt + deltaT;
+      const result = swisseph.swe_calc(jdTT, id, swisseph.SEFLG_SWIEPH);
+      return result ? result.longitude : null;
+    }
+    
+    // CALCOLO POSIZIONI DEI PIANETI DEL TEMA NATALE
+    const pianetiNatali = {
+      sole: calcPlanet(swisseph.SE_SUN, 'Sole', jdUtNascita),
+      luna: calcPlanet(swisseph.SE_MOON, 'Luna', jdUtNascita),
+      mercurio: calcPlanet(swisseph.SE_MERCURY, 'Mercurio', jdUtNascita),
+      venere: calcPlanet(swisseph.SE_VENUS, 'Venere', jdUtNascita),
+      marte: calcPlanet(swisseph.SE_MARS, 'Marte', jdUtNascita),
+      giove: calcPlanet(swisseph.SE_JUPITER, 'Giove', jdUtNascita),
+      saturno: calcPlanet(swisseph.SE_SATURN, 'Saturno', jdUtNascita),
+      urano: calcPlanet(swisseph.SE_URANUS, 'Urano', jdUtNascita),
+      nettuno: calcPlanet(swisseph.SE_NEPTUNE, 'Nettuno', jdUtNascita),
+      plutone: calcPlanet(swisseph.SE_PLUTO, 'Plutone', jdUtNascita)
+    };
+    
+    // CALCOLO POSIZIONI DEI PIANETI DEL GIORNO DEL TRANSITO
+    const pianetiTransito = {
+      sole: getPosizionePianeta(swisseph.SE_SUN, jdUtTransito),
+      luna: getPosizionePianeta(swisseph.SE_MOON, jdUtTransito),
+      mercurio: getPosizionePianeta(swisseph.SE_MERCURY, jdUtTransito),
+      venere: getPosizionePianeta(swisseph.SE_VENUS, jdUtTransito),
+      marte: getPosizionePianeta(swisseph.SE_MARS, jdUtTransito),
+      giove: getPosizionePianeta(swisseph.SE_JUPITER, jdUtTransito),
+      saturno: getPosizionePianeta(swisseph.SE_SATURN, jdUtTransito),
+      urano: getPosizionePianeta(swisseph.SE_URANUS, jdUtTransito),
+      nettuno: getPosizionePianeta(swisseph.SE_NEPTUNE, jdUtTransito),
+      plutone: getPosizionePianeta(swisseph.SE_PLUTO, jdUtTransito)
+    };
+    
+    // CALCOLO ASPETTI DI TRANSITO
+    const segni = ['Ariete', 'Toro', 'Gemelli', 'Cancro', 'Leone', 'Vergine', 'Bilancia', 'Scorpione', 'Sagittario', 'Capricorno', 'Acquario', 'Pesci'];
+    const aspettiTransito = [];
+    
+    for (const [nomeNatale, longNatale] of Object.entries(pianetiNatali)) {
+      for (const [nomeTransito, longTransito] of Object.entries(pianetiTransito)) {
+        if (longNatale === null || longTransito === null) continue;
+        
+        let diff = Math.abs(longNatale - longTransito);
+        if (diff > 180) diff = 360 - diff;
+        
+        let aspetto = null;
+        let orb = null;
+        let colore = null;
+        
+        if (diff < 8) {
+          aspetto = 'Congiunzione';
+          orb = diff.toFixed(2);
+          colore = '#ffffff';
+        } else if (Math.abs(diff - 60) < 6) {
+          aspetto = 'Sestile';
+          orb = Math.abs(diff - 60).toFixed(2);
+          colore = '#66ff66';
+        } else if (Math.abs(diff - 90) < 8) {
+          aspetto = 'Quadrato';
+          orb = Math.abs(diff - 90).toFixed(2);
+          colore = '#ff6666';
+        } else if (Math.abs(diff - 120) < 8) {
+          aspetto = 'Trigono';
+          orb = Math.abs(diff - 120).toFixed(2);
+          colore = '#6666ff';
+        } else if (Math.abs(diff - 180) < 8) {
+          aspetto = 'Opposizione';
+          orb = Math.abs(diff - 180).toFixed(2);
+          colore = '#ff3366';
+        }
+        
+        if (aspetto) {
+          const segnoNatale = segni[Math.floor(longNatale / 30)];
+          const segnoTransito = segni[Math.floor(longTransito / 30)];
+          
+          aspettiTransito.push({
+            pianetaNatale: nomeNatale,
+            pianetaTransito: nomeTransito,
+            aspetto: aspetto,
+            orb: orb,
+            colore: colore,
+            segnoNatale: segnoNatale,
+            segnoTransito: segnoTransito
+          });
+        }
+      }
+    }
+    
+    // Ordina per orb (più stretto prima)
+    aspettiTransito.sort((a, b) => parseFloat(a.orb) - parseFloat(b.orb));
+    
+    // Genera descrizioni tecniche
+    const aspettiFinali = aspettiTransito.slice(0, 15).map(a => {
+      let descrizione = '';
+      if (a.aspetto === 'Congiunzione') {
+        descrizione = `${a.pianetaNatale} e ${a.pianetaTransito} si uniscono, amplificando le rispettive energie. Momento di concentrazione e intensità.`;
+      } else if (a.aspetto === 'Sestile') {
+        descrizione = `Opportunità di collaborazione tra ${a.pianetaNatale} e ${a.pianetaTransito}. Un'occasione da non perdere.`;
+      } else if (a.aspetto === 'Quadrato') {
+        descrizione = `Tensione costruttiva. ${a.pianetaNatale} e ${a.pianetaTransito} creano attrito che può diventare motore di cambiamento.`;
+      } else if (a.aspetto === 'Trigono') {
+        descrizione = `Armonia e fluidità. ${a.pianetaNatale} e ${a.pianetaTransito} lavorano insieme senza sforzo.`;
+      } else if (a.aspetto === 'Opposizione') {
+        descrizione = `Bisogno di equilibrio. ${a.pianetaNatale} e ${a.pianetaTransito} richiedono una sintesi tra poli opposti.`;
+      }
+      return { ...a, descrizione };
+    });
+    
+    console.log(`🔗 Trovati ${aspettiTransito.length} aspetti di transito`);
+    
+    res.json({
+      aspetti: aspettiFinali,
+      dataTransito: dataTransito
+    });
+    
+  } catch (err) {
+    console.error('❌ ERRORE TRANSITI:', err.message);
     res.status(500).json({ errore: err.message || 'Errore server' });
   }
 });
