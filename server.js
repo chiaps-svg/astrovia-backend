@@ -2,6 +2,24 @@ const express = require('express');
 const swisseph = require('swisseph');
 const fs = require('fs');
 
+// Importa le frasi per le previsioni
+let frasiAspetti, consigliPositivi, consigliNegativi, consigliNeutri;
+try {
+  const frasiModule = require('./data/frasi-previsioni');
+  frasiAspetti = frasiModule.frasiAspetti;
+  consigliPositivi = frasiModule.consigliPositivi;
+  consigliNegativi = frasiModule.consigliNegativi;
+  consigliNeutri = frasiModule.consigliNeutri;
+  console.log('✅ File frasi-previsioni.js caricato');
+} catch(e) {
+  console.log('⚠️ File frasi-previsioni.js non trovato, uso frasi di default');
+  // Fallback: crea oggetti vuoti
+  frasiAspetti = {};
+  consigliPositivi = ["✨ Le stelle oggi sono allineate per te."];
+  consigliNegativi = ["⚠️ Giornata potenzialmente complessa."];
+  consigliNeutri = ["⚖️ Giornata equilibrata."];
+}
+
 console.log('🔍 DIRECTORY CORRENTE:', __dirname);
 console.log('🔍 La cartella ./ephe esiste?', fs.existsSync('./ephe'));
 
@@ -10,9 +28,6 @@ if (fs.existsSync('./ephe')) {
   swisseph.swe_set_ephe_path('./ephe');
   console.log('✅ Percorso impostato su ./ephe');
   
-  // =======================
-  // 🔥 VERIFICA FILE swe_deltat.txt
-  // =======================
   try {
     const deltaTFile = './ephe/swe_deltat.txt';
     if (fs.existsSync(deltaTFile)) {
@@ -28,9 +43,6 @@ if (fs.existsSync('./ephe')) {
   console.log('❌ NESSUN PERCORSO TROVATO!');
 }
 
-// =======================
-// ⚙️ CONFIGURAZIONE PRECISIONE MASSIMA (DE431)
-// =======================
 if (typeof swisseph.swe_set_tid_acc === 'function') {
     swisseph.swe_set_tid_acc(-26.0);
     console.log('✅ Precisione massima attivata (modello DE431)');
@@ -110,7 +122,7 @@ function calcolaAspetti(pianeti) {
 }
 
 // =======================
-// 🔧 CALCOLO PRECISO - METODO UFFICIALE CON CORREZIONE DELTA T
+// 🔧 CALCOLO PRECISO
 // =======================
 function calcPlanet(id, nome, jdUt) {
   try {
@@ -121,7 +133,6 @@ function calcPlanet(id, nome, jdUt) {
         deltaT = deltaT.delta_t || deltaT.deltat || 0;
     }
     
-    console.log(`📐 Delta T per ${nome}: ${deltaT} giorni`);
     const jdTT = jdUt + deltaT;
     const result = swisseph.swe_calc(jdTT, id, swisseph.SEFLG_SWIEPH | swisseph.SEFLG_SPEED);
     
@@ -136,14 +147,9 @@ function calcPlanet(id, nome, jdUt) {
       longitudine = result[0];
     }
     
-    if (longitudine !== null && !isNaN(longitudine)) {
-      console.log(`✅ ${nome}: ${longitudine.toFixed(4)}° (TT)`);
-    }
-    
     return longitudine;
     
   } catch (e) {
-    console.error(`❌ Errore calcolo ${nome}:`, e.message);
     return null;
   }
 }
@@ -155,6 +161,25 @@ function calcolaAscendente(jdUt, latNum, lonNum) {
   const houses = swisseph.swe_houses(jdUt, latNum, lonNum, 'P');
   const ascendenteLong = houses.ascmc ? houses.ascmc[0] : houses.house[0];
   return ascendenteLong;
+}
+
+// =======================
+// 🔮 FUNZIONE PER GENERARE TESTO ASPETTO
+// =======================
+function generaTestoAspetto(aspetto, pianetaNatale, segnoNatale, pianetaTransito, segnoTransito) {
+  const categoria = frasiAspetti[aspetto] || frasiAspetti['Sestile'] || {};
+  const listaFrasi = categoria[pianetaNatale] || categoria['default'] || [
+    "{pianetaNatale} in {segnoNatale} è in {aspetto} con {pianetaTransito} in {segnoTransito}."
+  ];
+  
+  const template = listaFrasi[Math.floor(Math.random() * listaFrasi.length)];
+  
+  return template
+    .replace(/{pianetaNatale}/g, pianetaNatale.charAt(0).toUpperCase() + pianetaNatale.slice(1))
+    .replace(/{segnoNatale}/g, segnoNatale)
+    .replace(/{pianetaTransito}/g, pianetaTransito.charAt(0).toUpperCase() + pianetaTransito.slice(1))
+    .replace(/{segnoTransito}/g, segnoTransito)
+    .replace(/{aspetto}/g, aspetto.toLowerCase());
 }
 
 // =======================
@@ -175,7 +200,6 @@ app.post('/tema-natale', (req, res) => {
     let [h, min] = ora.split(':').map(Number);
     
     let oraUt = h + min / 60 - 1;
-    console.log(`🔍 Verifica: ora italiana ${h}:${min} -> UT=${oraUt.toFixed(6)}`);
     let giornoJD = d;
     let meseJD = m;
     let annoJD = y;
@@ -198,14 +222,9 @@ app.post('/tema-natale', (req, res) => {
       }
     }
     
-    console.log(`📅 Ora italiana: ${h}:${min} (CET UTC+1) -> UT: ${oraUt.toFixed(6)}`);
-    console.log(`📅 Data UT: ${annoJD}-${meseJD}-${giornoJD}`);
-    
     const jdUt = swisseph.swe_julday(annoJD, meseJD, giornoJD, oraUt, swisseph.SE_GREG_CAL);
     const latNum = parseFloat(lat);
     const lonNum = parseFloat(lon);
-    
-    console.log(`📆 Julian Day (UT): ${jdUt.toFixed(8)}`);
     
     const segni = ['Ariete ♈', 'Toro ♉', 'Gemelli ♊', 'Cancro ♋', 'Leone ♌', 'Vergine ♍', 'Bilancia ♎', 'Scorpione ♏', 'Sagittario ♐', 'Capricorno ♑', 'Acquario ♒', 'Pesci ♓'];
     
@@ -224,8 +243,6 @@ app.post('/tema-natale', (req, res) => {
     const cuspidi = houses.house;
     const ascendenteLong = houses.ascmc ? houses.ascmc[0] : cuspidi[0];
     const medioCieloLong = houses.ascmc ? houses.ascmc[1] : cuspidi[9];
-    
-    console.log(`📊 Ascendente: ${ascendenteLong.toFixed(4)}° -> ${segni[Math.floor(ascendenteLong / 30)]} ${(ascendenteLong % 30).toFixed(2)}°`);
     
     const caseAstrologiche = {
       ascendente: getSegnoGrado(ascendenteLong),
@@ -260,14 +277,9 @@ app.post('/tema-natale', (req, res) => {
           nodoSud: getSegnoGrado((nodoNordLong + 180) % 360)
         };
       }
-    } catch(e) {
-      console.log('❌ Nodi Lunari: errore');
-    }
+    } catch(e) {}
     
     const aspetti = calcolaAspetti(pianeti);
-    console.log(`🔗 Trovati ${aspetti.length} aspetti planetari`);
-    
-    console.log('📤 INVIO RISPOSTA AL FRONTEND');
     
     res.json({ 
       jd: jdUt,
@@ -279,7 +291,6 @@ app.post('/tema-natale', (req, res) => {
     
   } catch (err) {
     console.error('❌ ERRORE GENERALE:', err.message);
-    console.error(err.stack);
     res.status(500).json({ errore: err.message || 'Errore server' });
   }
 });
@@ -328,15 +339,11 @@ app.post('/ascendente', (req, res) => {
     const latNum = parseFloat(lat);
     const lonNum = parseFloat(lon);
     
-    console.log(`📆 Julian Day (UT): ${jdUt.toFixed(8)}`);
-    
     const ascendenteLong = calcolaAscendente(jdUt, latNum, lonNum);
     
     const segni = ['Ariete', 'Toro', 'Gemelli', 'Cancro', 'Leone', 'Vergine', 'Bilancia', 'Scorpione', 'Sagittario', 'Capricorno', 'Acquario', 'Pesci'];
     const segnoIndex = Math.floor(ascendenteLong / 30);
     const grado = (ascendenteLong % 30).toFixed(2);
-    
-    console.log(`📊 Ascendente calcolato: ${ascendenteLong.toFixed(4)}° -> ${segni[segnoIndex]} ${grado}°`);
     
     res.json({ 
       segno: segni[segnoIndex],
@@ -396,14 +403,10 @@ app.post('/previsioni', (req, res) => {
     const latNum = parseFloat(lat);
     const lonNum = parseFloat(lon);
     
-    console.log(`📆 Julian Day nascita (UT): ${jdUtNascita.toFixed(8)}`);
-    
-    // CONVERSIONE DATA PREVISIONE (assumiamo mezzogiorno come ora)
+    // CONVERSIONE DATA PREVISIONE (mezzogiorno)
     const [y2, m2, d2] = dataPrevisione.split('T')[0].split('-').map(Number);
-    const oraPrevisioneUt = 12; // mezzogiorno UT
+    const oraPrevisioneUt = 12;
     const jdUtPrevisione = swisseph.swe_julday(y2, m2, d2, oraPrevisioneUt, swisseph.SE_GREG_CAL);
-    
-    console.log(`📆 Julian Day previsione (UT): ${jdUtPrevisione.toFixed(8)}`);
     
     // CALCOLO POSIZIONI PIANETI AL MOMENTO DELLA PREVISIONE
     function getPosizionePianeta(id, nome, jdUt) {
@@ -447,7 +450,6 @@ app.post('/previsioni', (req, res) => {
     // CALCOLO ASPETTI TRA NATALE E PREVISIONE
     const aspettiPrevisioni = [];
     
-    // Aspetti tra Sole natale e pianeti in transito
     for (const [nomeNatale, longNatale] of Object.entries(pianetiNatali)) {
       for (const [nomeTransito, longTransito] of Object.entries(pianetiPrevisione)) {
         if (longNatale === null || longTransito === null) continue;
@@ -460,79 +462,86 @@ app.post('/previsioni', (req, res) => {
             pianetaNatale: nomeNatale,
             pianetaTransito: nomeTransito,
             aspetto: 'Congiunzione',
-            orb: diff.toFixed(2),
-            colore: '#ffffff'
+            orb: diff.toFixed(2)
           });
         } else if (Math.abs(diff - 60) < 6) {
           aspettiPrevisioni.push({
             pianetaNatale: nomeNatale,
             pianetaTransito: nomeTransito,
             aspetto: 'Sestile',
-            orb: Math.abs(diff - 60).toFixed(2),
-            colore: '#66ff66'
+            orb: Math.abs(diff - 60).toFixed(2)
           });
         } else if (Math.abs(diff - 90) < 8) {
           aspettiPrevisioni.push({
             pianetaNatale: nomeNatale,
             pianetaTransito: nomeTransito,
             aspetto: 'Quadrato',
-            orb: Math.abs(diff - 90).toFixed(2),
-            colore: '#ff6666'
+            orb: Math.abs(diff - 90).toFixed(2)
           });
         } else if (Math.abs(diff - 120) < 8) {
           aspettiPrevisioni.push({
             pianetaNatale: nomeNatale,
             pianetaTransito: nomeTransito,
             aspetto: 'Trigono',
-            orb: Math.abs(diff - 120).toFixed(2),
-            colore: '#6666ff'
+            orb: Math.abs(diff - 120).toFixed(2)
           });
         } else if (Math.abs(diff - 180) < 8) {
           aspettiPrevisioni.push({
             pianetaNatale: nomeNatale,
             pianetaTransito: nomeTransito,
             aspetto: 'Opposizione',
-            orb: Math.abs(diff - 180).toFixed(2),
-            colore: '#ff3366'
+            orb: Math.abs(diff - 180).toFixed(2)
           });
         }
       }
     }
     
-    // GENERAZIONE TESTO PREVISIONI
+    // GENERAZIONE TESTO PREVISIONI CON FRASI PROFESSIONALI
     const segni = ['Ariete', 'Toro', 'Gemelli', 'Cancro', 'Leone', 'Vergine', 'Bilancia', 'Scorpione', 'Sagittario', 'Capricorno', 'Acquario', 'Pesci'];
     
-    const aspettiTesto = aspettiPrevisioni.map(a => {
+    const aspettiTesto = [];
+    for (const a of aspettiPrevisioni) {
       const segnoNatale = segni[Math.floor(pianetiNatali[a.pianetaNatale] / 30)];
       const segnoTransito = segni[Math.floor(pianetiPrevisione[a.pianetaTransito] / 30)];
-      return {
-        testo: `${a.pianetaNatale} (${segnoNatale}) in ${a.aspetto} con ${a.pianetaTransito} (${segnoTransito}) - orb ${a.orb}°`
-      };
-    }).slice(0, 5); // limitiamo a 5 aspetti per non sovraccaricare
+      
+      // Usa la funzione professionale con le frasi estratte dal file
+      const testo = generaTestoAspetto(
+        a.aspetto,
+        a.pianetaNatale,
+        segnoNatale,
+        a.pianetaTransito,
+        segnoTransito
+      );
+      
+      aspettiTesto.push({ testo: testo });
+    }
     
-    // GENERAZIONE CONSIGLIO GENERICO
+    // Scegli massimo 5 aspetti per non sovraccaricare
+    const aspettiFinali = aspettiTesto.slice(0, 5);
+    
+    // GENERAZIONE CONSIGLIO
+    const aspettiPositivi = aspettiPrevisioni.filter(a => a.aspetto === 'Trigono' || a.aspetto === 'Sestile');
+    const aspettiNegativi = aspettiPrevisioni.filter(a => a.aspetto === 'Quadrato' || a.aspetto === 'Opposizione');
+    
     let consiglio = '';
-    if (aspettiPrevisioni.some(a => a.aspetto === 'Trigono')) {
-      consiglio = '✨ Un momento favorevole! Le energie cosmiche sono allineate per i tuoi progetti.';
-    } else if (aspettiPrevisioni.some(a => a.aspetto === 'Quadrato' || a.aspetto === 'Opposizione')) {
-      consiglio = '⚠️ Possibili tensioni oggi. Cerca di mantenere la calma e riflettere prima di agire.';
-    } else if (aspettiPrevisioni.some(a => a.aspetto === 'Sestile')) {
-      consiglio = '🌱 Ottime opportunità si presentano. Sii aperto alle novità e alle collaborazioni.';
+    if (aspettiPositivi.length > aspettiNegativi.length) {
+      consiglio = consigliPositivi[Math.floor(Math.random() * consigliPositivi.length)];
+    } else if (aspettiNegativi.length > aspettiPositivi.length) {
+      consiglio = consigliNegativi[Math.floor(Math.random() * consigliNegativi.length)];
     } else {
-      consiglio = '⭐ Giornata equilibrata. Ascolta il tuo intuito e seguì il tuo ritmo.';
+      consiglio = consigliNeutri[Math.floor(Math.random() * consigliNeutri.length)];
     }
     
     console.log(`🔗 Trovati ${aspettiPrevisioni.length} aspetti di transito`);
     
     res.json({
-      aspetti: aspettiTesto,
+      aspetti: aspettiFinali,
       consiglio: consiglio,
       dataPrevisione: dataPrevisione
     });
     
   } catch (err) {
     console.error('❌ ERRORE PREVISIONI:', err.message);
-    console.error(err.stack);
     res.status(500).json({ errore: err.message || 'Errore server' });
   }
 });
