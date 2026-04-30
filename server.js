@@ -192,7 +192,37 @@ function generaTestoAspetto(aspetto, pianetaNatale, segnoNatale, pianetaTransito
 }
 
 // =======================
-// 🌌 API - TEMA NATALE
+// 🌙 CALCOLO FASE LUNARE
+// =======================
+function calcolaFaseLunare(jdUt) {
+  try {
+    const longLuna = calcPlanet(swisseph.SE_MOON, 'Luna', jdUt);
+    const longSole = calcPlanet(swisseph.SE_SUN, 'Sole', jdUt);
+    
+    if (longLuna === null || longSole === null) return { nome: 'Sconosciuta', percentuale: 0 };
+    
+    let diff = longLuna - longSole;
+    if (diff < 0) diff += 360;
+    
+    const percentuale = Math.round((diff / 360) * 100);
+    
+    let nome = '';
+    if (diff < 45 || diff >= 315) nome = '🌑 Luna Nuova';
+    else if (diff < 90) nome = '🌒 Primo Quarto (crescente)';
+    else if (diff < 135) nome = '🌓 Gibbosa crescente';
+    else if (diff < 180) nome = '🌕 Luna Piena';
+    else if (diff < 225) nome = '🌖 Gibbosa calante';
+    else if (diff < 270) nome = '🌘 Ultimo Quarto';
+    else if (diff < 315) nome = '🌘 Luna calante';
+    
+    return { nome, percentuale, angolo: diff };
+  } catch(e) {
+    return { nome: 'Errore', percentuale: 0 };
+  }
+}
+
+// =======================
+// 🌟 API - TEMA NATALE
 // =======================
 app.post('/tema-natale', (req, res) => {
   console.log('\n🔥 RICHIESTA TEMA NATALE');
@@ -894,6 +924,119 @@ app.post('/compatibilita', (req, res) => {
     
   } catch (err) {
     console.error('❌ ERRORE COMPATIBILITÀ:', err.message);
+    res.status(500).json({ errore: err.message || 'Errore server' });
+  }
+});
+
+// =======================
+// 📅 API - CALENDARIO ASTROLOGICO (MENSILE)
+// =======================
+app.post('/calendario-mese', (req, res) => {
+  console.log('\n🔥 RICHIESTA CALENDARIO MENSILE');
+  
+  try {
+    const { anno, mese } = req.body;
+    console.log(`📥 Anno: ${anno}, Mese: ${mese}`);
+    
+    if (!anno || !mese || mese < 1 || mese > 12) {
+      return res.status(400).json({ errore: 'Parametri anno e mese validi richiesti' });
+    }
+    
+    // Primo giorno del mese
+    const primoGiorno = new Date(anno, mese - 1, 1);
+    const ultimoGiorno = new Date(anno, mese, 0);
+    const giorniNelMese = ultimoGiorno.getDate();
+    
+    const giorni = [];
+    
+    // Per ogni giorno del mese
+    for (let giorno = 1; giorno <= giorniNelMese; giorno++) {
+      const data = `${anno}-${String(mese).padStart(2, '0')}-${String(giorno).padStart(2, '0')}`;
+      const jdUt = swisseph.swe_julday(anno, mese, giorno, 12, swisseph.SE_GREG_CAL);
+      
+      // Fase lunare
+      const faseLunare = calcolaFaseLunare(jdUt);
+      
+      // Aspetti del giorno (tra pianeti in transito)
+      const pianetiDelGiorno = {
+        sole: calcPlanet(swisseph.SE_SUN, 'Sole', jdUt),
+        luna: calcPlanet(swisseph.SE_MOON, 'Luna', jdUt),
+        mercurio: calcPlanet(swisseph.SE_MERCURY, 'Mercurio', jdUt),
+        venere: calcPlanet(swisseph.SE_VENUS, 'Venere', jdUt),
+        marte: calcPlanet(swisseph.SE_MARS, 'Marte', jdUt),
+        giove: calcPlanet(swisseph.SE_JUPITER, 'Giove', jdUt),
+        saturno: calcPlanet(swisseph.SE_SATURN, 'Saturno', jdUt),
+        urano: calcPlanet(swisseph.SE_URANUS, 'Urano', jdUt),
+        nettuno: calcPlanet(swisseph.SE_NEPTUNE, 'Nettuno', jdUt),
+        plutone: calcPlanet(swisseph.SE_PLUTO, 'Plutone', jdUt)
+      };
+      
+      // Converti in formato con segno e grado per calcolo aspetti
+      const segni = ['Ariete', 'Toro', 'Gemelli', 'Cancro', 'Leone', 'Vergine', 'Bilancia', 'Scorpione', 'Sagittario', 'Capricorno', 'Acquario', 'Pesci'];
+      const pianetiConSegno = {};
+      for (const [nome, long] of Object.entries(pianetiDelGiorno)) {
+        if (long !== null) {
+          pianetiConSegno[nome] = {
+            longitudine: long,
+            segno: segni[Math.floor(long / 30)],
+            grado: (long % 30).toFixed(2)
+          };
+        }
+      }
+      
+      const aspettiGiorno = calcolaAspetti(pianetiConSegno);
+      const aspettiImportanti = aspettiGiorno.slice(0, 5); // Limita a 5 aspetti per giorno
+      
+      // Eventi planetari (ingressi in segno - rilevanti quando cambia segno)
+      const eventi = [];
+      
+      // Controlla se oggi c'è un cambio di segno per qualche pianeta
+      if (giorno > 1) {
+        const jdUtIeri = swisseph.swe_julday(anno, mese, giorno - 1, 12, swisseph.SE_GREG_CAL);
+        const segnoIeri = {};
+        for (const [nome, id] of Object.entries({
+          sole: swisseph.SE_SUN, luna: swisseph.SE_MOON, mercurio: swisseph.SE_MERCURY,
+          venere: swisseph.SE_VENUS, marte: swisseph.SE_MARS, giove: swisseph.SE_JUPITER,
+          saturno: swisseph.SE_SATURN, urano: swisseph.SE_URANUS, nettuno: swisseph.SE_NEPTUNE,
+          plutone: swisseph.SE_PLUTO
+        })) {
+          const longIeri = calcPlanet(id, nome, jdUtIeri);
+          if (longIeri !== null) segnoIeri[nome] = Math.floor(longIeri / 30);
+        }
+        
+        for (const [nome, id] of Object.entries({
+          sole: swisseph.SE_SUN, luna: swisseph.SE_MOON, mercurio: swisseph.SE_MERCURY,
+          venere: swisseph.SE_VENUS, marte: swisseph.SE_MARS, giove: swisseph.SE_JUPITER,
+          saturno: swisseph.SE_SATURN, urano: swisseph.SE_URANUS, nettuno: swisseph.SE_NEPTUNE,
+          plutone: swisseph.SE_PLUTO
+        })) {
+          const longOggi = pianetiDelGiorno[nome];
+          if (longOggi !== null) {
+            const segnoOggi = Math.floor(longOggi / 30);
+            if (segnoIeri[nome] !== undefined && segnoIeri[nome] !== segnoOggi) {
+              eventi.push(`${nome.charAt(0).toUpperCase() + nome.slice(1)} entra in ${segni[segnoOggi]}`);
+            }
+          }
+        }
+      }
+      
+      giorni.push({
+        data: data,
+        giorno: giorno,
+        faseLunare: faseLunare,
+        aspetti: aspettiImportanti.map(a => `${a.pianeta1} ${a.aspetto} ${a.pianeta2} (orb ${a.orb}°)`),
+        eventi: eventi
+      });
+    }
+    
+    res.json({
+      anno: anno,
+      mese: mese,
+      giorni: giorni
+    });
+    
+  } catch (err) {
+    console.error('❌ ERRORE CALENDARIO:', err.message);
     res.status(500).json({ errore: err.message || 'Errore server' });
   }
 });
