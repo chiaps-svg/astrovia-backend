@@ -1,6 +1,7 @@
 const express = require('express');
 const swisseph = require('swisseph');
 const fs = require('fs');
+const puppeteer = require('puppeteer');
 
 // Importa le frasi per le previsioni
 let frasiAspetti, consigliPositivi, consigliNegativi, consigliNeutri;
@@ -895,6 +896,224 @@ app.post('/compatibilita', (req, res) => {
   } catch (err) {
     console.error('❌ ERRORE COMPATIBILITÀ:', err.message);
     res.status(500).json({ errore: err.message || 'Errore server' });
+  }
+});
+
+// =======================
+// 📄 GENERA PDF TEMA NATALE (con puppeteer)
+// =======================
+app.post('/genera-pdf-tema', async (req, res) => {
+  console.log('\n🔥 RICHIESTA PDF TEMA NATALE');
+  
+  try {
+    const { data, ora, lat, lon } = req.body;
+    console.log(`📥 ${data} ${ora} ${lat} ${lon}`);
+
+    if (!data || !ora || !lat || !lon) {
+      return res.status(400).json({ errore: 'Parametri mancanti' });
+    }
+
+    // Calcola il tema natale (riusa la logica esistente)
+    const [y, m, d] = data.split('-').map(Number);
+    let [h, min] = ora.split(':').map(Number);
+    
+    let oraUt = h + min / 60 - 1;
+    let giornoJD = d;
+    let meseJD = m;
+    let annoJD = y;
+    
+    if (oraUt < 0) {
+      oraUt += 24;
+      giornoJD--;
+      
+      if (giornoJD < 1) {
+        const giorniMese = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+        const isLeap = (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
+        if (isLeap) giorniMese[1] = 29;
+        
+        meseJD--;
+        if (meseJD < 1) {
+          meseJD = 12;
+          annoJD--;
+        }
+        giornoJD = giorniMese[meseJD - 1];
+      }
+    }
+    
+    const jdUt = swisseph.swe_julday(annoJD, meseJD, giornoJD, oraUt, swisseph.SE_GREG_CAL);
+    const latNum = parseFloat(lat);
+    const lonNum = parseFloat(lon);
+    
+    const segni = ['Ariete ♈', 'Toro ♉', 'Gemelli ♊', 'Cancro ♋', 'Leone ♌', 'Vergine ♍', 'Bilancia ♎', 'Scorpione ♏', 'Sagittario ♐', 'Capricorno ♑', 'Acquario ♒', 'Pesci ♓'];
+    
+    function getSegnoGrado(long) {
+      if (long === undefined || long === null) return null;
+      const indiceSegno = Math.floor(long / 30);
+      const grado = (long % 30).toFixed(2);
+      return {
+        longitudine: long,
+        segno: segni[indiceSegno],
+        grado: grado
+      };
+    }
+    
+    const houses = swisseph.swe_houses(jdUt, latNum, lonNum, 'P');
+    const ascendenteLong = houses.ascmc ? houses.ascmc[0] : houses.house[0];
+    const medioCieloLong = houses.ascmc ? houses.ascmc[1] : houses.house[9];
+    
+    const caseAstrologiche = {
+      ascendente: getSegnoGrado(ascendenteLong),
+      medioCielo: getSegnoGrado(medioCieloLong),
+      discendente: getSegnoGrado((ascendenteLong + 180) % 360),
+      fondoCielo: getSegnoGrado((medioCieloLong + 180) % 360)
+    };
+    
+    const pianeti = {
+      sole: getSegnoGrado(calcPlanet(swisseph.SE_SUN, 'Sole', jdUt)),
+      luna: getSegnoGrado(calcPlanet(swisseph.SE_MOON, 'Luna', jdUt)),
+      mercurio: getSegnoGrado(calcPlanet(swisseph.SE_MERCURY, 'Mercurio', jdUt)),
+      venere: getSegnoGrado(calcPlanet(swisseph.SE_VENUS, 'Venere', jdUt)),
+      marte: getSegnoGrado(calcPlanet(swisseph.SE_MARS, 'Marte', jdUt)),
+      giove: getSegnoGrado(calcPlanet(swisseph.SE_JUPITER, 'Giove', jdUt)),
+      saturno: getSegnoGrado(calcPlanet(swisseph.SE_SATURN, 'Saturno', jdUt)),
+      urano: getSegnoGrado(calcPlanet(swisseph.SE_URANUS, 'Urano', jdUt)),
+      nettuno: getSegnoGrado(calcPlanet(swisseph.SE_NEPTUNE, 'Nettuno', jdUt)),
+      plutone: getSegnoGrado(calcPlanet(swisseph.SE_PLUTO, 'Plutone', jdUt)),
+      chirone: getSegnoGrado(calcPlanet(swisseph.SE_CHIRON, 'Chirone', jdUt)),
+      lilith: getSegnoGrado(calcPlanet(swisseph.SE_MEAN_APOG, 'Lilith', jdUt))
+    };
+    
+    let nodiLunari = null;
+    try {
+      const nodoNordLong = calcPlanet(11, 'Nodo Nord', jdUt);
+      if (nodoNordLong !== null && !isNaN(nodoNordLong)) {
+        nodiLunari = {
+          nodoNord: getSegnoGrado(nodoNordLong),
+          nodoSud: getSegnoGrado((nodoNordLong + 180) % 360)
+        };
+      }
+    } catch(e) {}
+    
+    const aspetti = calcolaAspetti(pianeti);
+    
+    // Costruisci l'HTML per il PDF
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { 
+            font-family: 'Cinzel', 'Times New Roman', serif; 
+            background: white; 
+            padding: 20px; 
+          }
+          .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #1a1a2e;
+          }
+          h1 { text-align: center; font-size: 28px; color: #1a1a2e; margin-bottom: 5px; }
+          .subtitle { text-align: center; font-size: 12px; color: #666; margin-bottom: 20px; border-bottom: 2px solid #c9a83b; padding-bottom: 10px; }
+          h3 { color: #c9a83b; text-align: center; margin: 20px 0 10px; font-size: 18px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+          th { border-bottom: 2px solid #c9a83b; padding: 8px; text-align: left; background: #f9f6f0; }
+          td { padding: 6px; border-bottom: 1px solid #eee; }
+          .cardini { display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; margin: 15px 0; }
+          .card { background: #f5f0e8; padding: 10px 20px; border-radius: 20px; text-align: center; min-width: 120px; }
+          .card strong { display: block; font-size: 12px; color: #666; }
+          .card div { font-size: 16px; color: #c9a83b; font-weight: bold; margin-top: 5px; }
+          .footer { text-align: center; margin-top: 30px; font-size: 9px; color: #999; border-top: 1px solid #eee; padding-top: 10px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>✨ TEMA NATALE ✨</h1>
+          <div class="subtitle">${data} | ${ora}</div>
+          
+          <h3>🏛️ CARDINI DEL TEMA</h3>
+          <div class="cardini">
+            <div class="card"><strong>Ascendente</strong><div>${caseAstrologiche.ascendente?.segno || '-'}<br>${caseAstrologiche.ascendente?.grado || '-'}°</div></div>
+            <div class="card"><strong>Medio Cielo</strong><div>${caseAstrologiche.medioCielo?.segno || '-'}<br>${caseAstrologiche.medioCielo?.grado || '-'}°</div></div>
+            <div class="card"><strong>Discendente</strong><div>${caseAstrologiche.discendente?.segno || '-'}<br>${caseAstrologiche.discendente?.grado || '-'}°</div></div>
+            <div class="card"><strong>Fondo Cielo</strong><div>${caseAstrologiche.fondoCielo?.segno || '-'}<br>${caseAstrologiche.fondoCielo?.grado || '-'}°</div></div>
+          </div>
+          
+          <h3>📋 POSIZIONI PLANETARIE</h3>
+          <table>
+            <thead><tr><th>Pianeta</th><th>Segno</th><th>Grado</th></tr></thead>
+            <tbody>
+              ${Object.keys(pianeti).map(key => `
+                <tr>
+                  <td><strong>${key.toUpperCase()}</strong></td>
+                  <td>${pianeti[key]?.segno || '-'}</td>
+                  <td>${pianeti[key]?.grado || '-'}°</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          
+          ${nodiLunari ? `
+            <h3>🌙 NODI LUNARI</h3>
+            <table>
+              <thead><tr><th>Nodo</th><th>Segno</th><th>Grado</th></tr></thead>
+              <tbody>
+                <tr><td>☊ Nodo Nord</td><td>${nodiLunari.nodoNord?.segno || '-'}</td><td>${nodiLunari.nodoNord?.grado || '-'}°</td></tr>
+                <tr><td>☋ Nodo Sud</td><td>${nodiLunari.nodoSud?.segno || '-'}</td><td>${nodiLunari.nodoSud?.grado || '-'}°</td></tr>
+              </tbody>
+            </table>
+          ` : ''}
+          
+          ${aspetti.length > 0 ? `
+            <h3>⚡ ASPETTI PLANETARI</h3>
+            <table style="font-size: 11px;">
+              <thead><tr><th>Pianeta 1</th><th>Pianeta 2</th><th>Aspetto</th><th>Orb</th></tr></thead>
+              <tbody>
+                ${aspetti.slice(0, 30).map(a => `
+                  <tr>
+                    <td>${a.pianeta1}</td>
+                    <td>${a.pianeta2}</td>
+                    <td style="color:#c9a83b;">${a.aspetto}</td>
+                    <td>${a.orb}°</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          ` : ''}
+          
+          <div class="footer">
+            <p>Astrovia - Il tuo cielo, le tue stelle ✨ | Calcolato con Swiss Ephemeris</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+    
+    // Avvia puppeteer e genera PDF
+    const browser = await puppeteer.launch({ 
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+    const page = await browser.newPage();
+    await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+    
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: { top: '15mm', bottom: '15mm', left: '15mm', right: '15mm' }
+    });
+    
+    await browser.close();
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=tema-natale-${data}.pdf`);
+    res.send(pdfBuffer);
+    
+  } catch (err) {
+    console.error('❌ ERRORE PDF:', err.message);
+    res.status(500).json({ errore: err.message || 'Errore generazione PDF' });
   }
 });
 
