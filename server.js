@@ -1295,5 +1295,415 @@ app.post('/genera-pdf-tema', async (req, res) => {
   }
 });
 
+// =======================
+// 📄 GENERA PDF TRANSITI (con Puppeteer)
+// =======================
+app.post('/genera-pdf-transiti', async (req, res) => {
+  console.log('\n🔥 RICHIESTA PDF TRANSITI');
+  
+  try {
+    const { data, ora, lat, lon, dataTransito } = req.body;
+    console.log(`📥 Nascita: ${data} ${ora} ${lat} ${lon}`);
+    console.log(`📥 Data transito: ${dataTransito}`);
+
+    if (!data || !ora || !lat || !lon || !dataTransito) {
+      return res.status(400).json({ errore: 'Parametri mancanti' });
+    }
+
+    // Calcola i transiti (riusa la logica esistente)
+    const [y, m, d] = data.split('-').map(Number);
+    let [h, min] = ora.split(':').map(Number);
+    
+    const dst = isItalianDST(y, m, d);
+    const offset = dst ? 2 : 1;
+    let oraUt = h + min / 60 - offset;
+    let giornoJD = d;
+    let meseJD = m;
+    let annoJD = y;
+    
+    if (oraUt < 0) {
+      oraUt += 24;
+      giornoJD--;
+      if (giornoJD < 1) {
+        const giorniMese = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+        const isLeap = (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
+        if (isLeap) giorniMese[1] = 29;
+        meseJD--;
+        if (meseJD < 1) {
+          meseJD = 12;
+          annoJD--;
+        }
+        giornoJD = giorniMese[meseJD - 1];
+      }
+    }
+    
+    const jdUtNascita = swisseph.swe_julday(annoJD, meseJD, giornoJD, oraUt, swisseph.SE_GREG_CAL);
+    const latNum = parseFloat(lat);
+    const lonNum = parseFloat(lon);
+    
+    const [y2, m2, d2] = dataTransito.split('-').map(Number);
+    const oraTransitoUt = 12;
+    const jdUtTransito = swisseph.swe_julday(y2, m2, d2, oraTransitoUt, swisseph.SE_GREG_CAL);
+    
+    function getPosizionePianeta(id, jdUt) {
+      let deltaT = swisseph.swe_deltat(jdUt);
+      if (typeof deltaT === 'object' && deltaT !== null) {
+        deltaT = deltaT.delta_t || deltaT.deltat || 0;
+      }
+      const jdTT = jdUt + deltaT;
+      const result = swisseph.swe_calc(jdTT, id, swisseph.SEFLG_SWIEPH);
+      return result ? result.longitude : null;
+    }
+    
+    const pianetiNatali = {
+      sole: calcPlanet(swisseph.SE_SUN, 'Sole', jdUtNascita),
+      luna: calcPlanet(swisseph.SE_MOON, 'Luna', jdUtNascita),
+      mercurio: calcPlanet(swisseph.SE_MERCURY, 'Mercurio', jdUtNascita),
+      venere: calcPlanet(swisseph.SE_VENUS, 'Venere', jdUtNascita),
+      marte: calcPlanet(swisseph.SE_MARS, 'Marte', jdUtNascita),
+      giove: calcPlanet(swisseph.SE_JUPITER, 'Giove', jdUtNascita),
+      saturno: calcPlanet(swisseph.SE_SATURN, 'Saturno', jdUtNascita),
+      urano: calcPlanet(swisseph.SE_URANUS, 'Urano', jdUtNascita),
+      nettuno: calcPlanet(swisseph.SE_NEPTUNE, 'Nettuno', jdUtNascita),
+      plutone: calcPlanet(swisseph.SE_PLUTO, 'Plutone', jdUtNascita)
+    };
+    
+    const pianetiTransito = {
+      sole: getPosizionePianeta(swisseph.SE_SUN, jdUtTransito),
+      luna: getPosizionePianeta(swisseph.SE_MOON, jdUtTransito),
+      mercurio: getPosizionePianeta(swisseph.SE_MERCURY, jdUtTransito),
+      venere: getPosizionePianeta(swisseph.SE_VENUS, jdUtTransito),
+      marte: getPosizionePianeta(swisseph.SE_MARS, jdUtTransito),
+      giove: getPosizionePianeta(swisseph.SE_JUPITER, jdUtTransito),
+      saturno: getPosizionePianeta(swisseph.SE_SATURN, jdUtTransito),
+      urano: getPosizionePianeta(swisseph.SE_URANUS, jdUtTransito),
+      nettuno: getPosizionePianeta(swisseph.SE_NEPTUNE, jdUtTransito),
+      plutone: getPosizionePianeta(swisseph.SE_PLUTO, jdUtTransito)
+    };
+    
+    const segni = ['Ariete', 'Toro', 'Gemelli', 'Cancro', 'Leone', 'Vergine', 'Bilancia', 'Scorpione', 'Sagittario', 'Capricorno', 'Acquario', 'Pesci'];
+    const aspettiTransito = [];
+    
+    for (const [nomeNatale, longNatale] of Object.entries(pianetiNatali)) {
+      for (const [nomeTransito, longTransito] of Object.entries(pianetiTransito)) {
+        if (longNatale === null || longTransito === null) continue;
+        
+        let diff = Math.abs(longNatale - longTransito);
+        if (diff > 180) diff = 360 - diff;
+        
+        let aspetto = null;
+        let orb = null;
+        
+        if (diff < 8) {
+          aspetto = 'Congiunzione';
+          orb = diff.toFixed(2);
+        } else if (Math.abs(diff - 60) < 6) {
+          aspetto = 'Sestile';
+          orb = Math.abs(diff - 60).toFixed(2);
+        } else if (Math.abs(diff - 90) < 8) {
+          aspetto = 'Quadrato';
+          orb = Math.abs(diff - 90).toFixed(2);
+        } else if (Math.abs(diff - 120) < 8) {
+          aspetto = 'Trigono';
+          orb = Math.abs(diff - 120).toFixed(2);
+        } else if (Math.abs(diff - 180) < 8) {
+          aspetto = 'Opposizione';
+          orb = Math.abs(diff - 180).toFixed(2);
+        }
+        
+        if (aspetto) {
+          const segnoNatale = segni[Math.floor(longNatale / 30)];
+          const segnoTransito = segni[Math.floor(longTransito / 30)];
+          
+          aspettiTransito.push({
+            pianetaNatale: nomeNatale,
+            pianetaTransito: nomeTransito,
+            aspetto: aspetto,
+            orb: orb,
+            segnoNatale: segnoNatale,
+            segnoTransito: segnoTransito
+          });
+        }
+      }
+    }
+    
+    aspettiTransito.sort((a, b) => parseFloat(a.orb) - parseFloat(b.orb));
+    const aspettiFinali = aspettiTransito.slice(0, 15);
+    
+    // Costruisci l'HTML per il PDF
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: 'Cinzel', 'Times New Roman', serif; background: white; padding: 20px; }
+          .container { max-width: 800px; margin: 0 auto; padding: 20px; color: #1a1a2e; }
+          h1 { text-align: center; font-size: 24px; color: #1a1a2e; }
+          .subtitle { text-align: center; font-size: 12px; color: #666; margin-bottom: 20px; border-bottom: 2px solid #c9a83b; padding-bottom: 10px; }
+          h3 { color: #c9a83b; margin: 20px 0 10px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 11px; }
+          th { border-bottom: 2px solid #c9a83b; padding: 8px; text-align: left; }
+          td { padding: 6px; border-bottom: 1px solid #eee; }
+          .footer { text-align: center; margin-top: 30px; font-size: 9px; color: #999; border-top: 1px solid #eee; padding-top: 10px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>✨ TRANSITI ASTRALI ✨</h1>
+          <div class="subtitle">Transiti per il ${dataTransito} | Tema natale: ${data}</div>
+          
+          <h3>📊 ASPETTI DI TRANSITO</h3>
+          <table>
+            <thead><tr><th>Pianeta Natale</th><th>Segno</th><th>Aspetto</th><th>Pianeta Transito</th><th>Segno</th><th>Orb</th></tr></thead>
+            <tbody>
+              ${aspettiFinali.map(a => `
+                <tr>
+                  <td><strong>${a.pianetaNatale}</strong></td>
+                  <td>${a.segnoNatale}</td>
+                  <td style="color:#c9a83b; text-align:center;">${a.aspetto}</td>
+                  <td><strong>${a.pianetaTransito}</strong></td>
+                  <td>${a.segnoTransito}</td>
+                  <td>${a.orb}°</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          
+          <div class="footer">
+            <p>Astrovia - Il tuo cielo, le tue stelle ✨ | Calcolato con Swiss Ephemeris</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+    
+    const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+    const page = await browser.newPage();
+    await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+    
+    const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true, margin: { top: '15mm', bottom: '15mm', left: '15mm', right: '15mm' } });
+    await browser.close();
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=transiti-${dataTransito}.pdf`);
+    res.send(pdfBuffer);
+    
+  } catch (err) {
+    console.error('❌ ERRORE PDF TRANSITI:', err.message);
+    res.status(500).json({ errore: err.message || 'Errore generazione PDF' });
+  }
+});
+
+// =======================
+// 📄 GENERA PDF COMPATIBILITÀ (con Puppeteer)
+// =======================
+app.post('/genera-pdf-compatibilita', async (req, res) => {
+  console.log('\n🔥 RICHIESTA PDF COMPATIBILITÀ');
+  
+  try {
+    const { personaA, personaB } = req.body;
+    console.log(`📥 Persona A: ${JSON.stringify(personaA)}`);
+    console.log(`📥 Persona B: ${JSON.stringify(personaB)}`);
+
+    if (!personaA || !personaB) {
+      return res.status(400).json({ errore: 'Parametri mancanti' });
+    }
+
+    // Funzione per calcolare i pianeti di una persona (riutilizzata)
+    function calcolaPianetiPersona(data, ora, lat, lon) {
+      const [y, m, d] = data.split('-').map(Number);
+      let [h, min] = ora.split(':').map(Number);
+      
+      const dst = isItalianDST(y, m, d);
+      const offset = dst ? 2 : 1;
+      let oraUt = h + min / 60 - offset;
+      let giornoJD = d;
+      let meseJD = m;
+      let annoJD = y;
+      
+      if (oraUt < 0) {
+        oraUt += 24;
+        giornoJD--;
+        if (giornoJD < 1) {
+          const giorniMese = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+          const isLeap = (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
+          if (isLeap) giorniMese[1] = 29;
+          meseJD--;
+          if (meseJD < 1) {
+            meseJD = 12;
+            annoJD--;
+          }
+          giornoJD = giorniMese[meseJD - 1];
+        }
+      }
+      
+      const jdUt = swisseph.swe_julday(annoJD, meseJD, giornoJD, oraUt, swisseph.SE_GREG_CAL);
+      const latNum = parseFloat(lat);
+      const lonNum = parseFloat(lon);
+      
+      const houses = swisseph.swe_houses(jdUt, latNum, lonNum, 'P');
+      const ascendenteLong = houses.ascmc ? houses.ascmc[0] : houses.house[0];
+      
+      const pianeti = {
+        sole: calcPlanet(swisseph.SE_SUN, 'Sole', jdUt),
+        luna: calcPlanet(swisseph.SE_MOON, 'Luna', jdUt),
+        mercurio: calcPlanet(swisseph.SE_MERCURY, 'Mercurio', jdUt),
+        venere: calcPlanet(swisseph.SE_VENUS, 'Venere', jdUt),
+        marte: calcPlanet(swisseph.SE_MARS, 'Marte', jdUt),
+        giove: calcPlanet(swisseph.SE_JUPITER, 'Giove', jdUt),
+        saturno: calcPlanet(swisseph.SE_SATURN, 'Saturno', jdUt),
+        urano: calcPlanet(swisseph.SE_URANUS, 'Urano', jdUt),
+        nettuno: calcPlanet(swisseph.SE_NEPTUNE, 'Nettuno', jdUt),
+        plutone: calcPlanet(swisseph.SE_PLUTO, 'Plutone', jdUt)
+      };
+      
+      return { pianeti, ascendenteLong };
+    }
+    
+    const personaAData = calcolaPianetiPersona(personaA.data, personaA.ora, personaA.lat, personaA.lon);
+    const personaBData = calcolaPianetiPersona(personaB.data, personaB.ora, personaB.lat, personaB.lon);
+    
+    const pianetiA = personaAData.pianeti;
+    const pianetiB = personaBData.pianeti;
+    
+    const segni = ['Ariete', 'Toro', 'Gemelli', 'Cancro', 'Leone', 'Vergine', 'Bilancia', 'Scorpione', 'Sagittario', 'Capricorno', 'Acquario', 'Pesci'];
+    const aspettiCompatibilita = [];
+    
+    for (const [nomeA, longA] of Object.entries(pianetiA)) {
+      for (const [nomeB, longB] of Object.entries(pianetiB)) {
+        if (longA === null || longB === null) continue;
+        
+        let diff = Math.abs(longA - longB);
+        if (diff > 180) diff = 360 - diff;
+        
+        let aspetto = null;
+        let orb = null;
+        
+        if (diff < 8) {
+          aspetto = 'Congiunzione';
+          orb = diff.toFixed(2);
+        } else if (Math.abs(diff - 60) < 6) {
+          aspetto = 'Sestile';
+          orb = Math.abs(diff - 60).toFixed(2);
+        } else if (Math.abs(diff - 90) < 8) {
+          aspetto = 'Quadrato';
+          orb = Math.abs(diff - 90).toFixed(2);
+        } else if (Math.abs(diff - 120) < 8) {
+          aspetto = 'Trigono';
+          orb = Math.abs(diff - 120).toFixed(2);
+        } else if (Math.abs(diff - 180) < 8) {
+          aspetto = 'Opposizione';
+          orb = Math.abs(diff - 180).toFixed(2);
+        }
+        
+        if (aspetto) {
+          const segnoA = segni[Math.floor(longA / 30)];
+          const segnoB = segni[Math.floor(longB / 30)];
+          
+          aspettiCompatibilita.push({
+            pianetaA: nomeA,
+            pianetaB: nomeB,
+            aspetto: aspetto,
+            orb: orb,
+            segnoA: segnoA,
+            segnoB: segnoB
+          });
+        }
+      }
+    }
+    
+    aspettiCompatibilita.sort((a, b) => parseFloat(a.orb) - parseFloat(b.orb));
+    
+    let punteggio = 0;
+    for (const a of aspettiCompatibilita) {
+      if (a.aspetto === 'Trigono' || a.aspetto === 'Sestile') punteggio += 10;
+      if (a.aspetto === 'Congiunzione') punteggio += 5;
+      if (a.aspetto === 'Opposizione') punteggio += 3;
+      if (a.aspetto === 'Quadrato') punteggio += 2;
+      punteggio += Math.max(0, 8 - parseFloat(a.orb));
+    }
+    punteggio = Math.min(100, Math.round(punteggio));
+    
+    let riepilogo = '';
+    if (punteggio >= 70) riepilogo = '🌟 Compatibilità eccellente! C\'è una forte armonia naturale tra di voi.';
+    else if (punteggio >= 50) riepilogo = '💫 Buona compatibilità. Ci sono molti aspetti armonici, ma anche qualche tensione costruttiva.';
+    else if (punteggio >= 30) riepilogo = '🌙 Compatibilità nella media. Il vostro rapporto richiede impegno e comunicazione.';
+    else riepilogo = '🌊 Compatibilità complessa. Molti aspetti di tensione: il vostro è un rapporto stimolante ma impegnativo.';
+    
+    const ascendenteA = segni[Math.floor(personaAData.ascendenteLong / 30)];
+    const ascendenteB = segni[Math.floor(personaBData.ascendenteLong / 30)];
+    
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: 'Cinzel', 'Times New Roman', serif; background: white; padding: 20px; }
+          .container { max-width: 800px; margin: 0 auto; padding: 20px; color: #1a1a2e; }
+          h1 { text-align: center; font-size: 24px; color: #1a1a2e; }
+          .subtitle { text-align: center; font-size: 12px; color: #666; margin-bottom: 20px; border-bottom: 2px solid #c9a83b; padding-bottom: 10px; }
+          h3 { color: #c9a83b; margin: 20px 0 10px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 11px; }
+          th { border-bottom: 2px solid #c9a83b; padding: 8px; text-align: left; }
+          td { padding: 6px; border-bottom: 1px solid #eee; }
+          .punteggio { font-size: 18px; font-weight: bold; color: #c9a83b; text-align: center; margin: 15px 0; }
+          .riepilogo { background: #f5f0e8; padding: 15px; border-radius: 15px; margin: 15px 0; font-style: italic; }
+          .footer { text-align: center; margin-top: 30px; font-size: 9px; color: #999; border-top: 1px solid #eee; padding-top: 10px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>💞 COMPATIBILITÀ ASTROLOGICA 💞</h1>
+          <div class="subtitle">${personaA.data} | ${personaB.data}</div>
+          
+          <div class="punteggio">Punteggio: ${punteggio}/100</div>
+          <div class="riepilogo">${riepilogo}</div>
+          
+          <h3>📊 ASPETTI TRA I TEMI</h3>
+          <table>
+            <thead><tr><th>Persona A</th><th>Segno</th><th>Aspetto</th><th>Persona B</th><th>Segno</th><th>Orb</th></tr></thead>
+            <tbody>
+              ${aspettiCompatibilita.slice(0, 20).map(a => `
+                <tr>
+                  <td><strong>${a.pianetaA}</strong></td>
+                  <td>${a.segnoA}</td>
+                  <td style="color:#c9a83b; text-align:center;">${a.aspetto}</td>
+                  <td><strong>${a.pianetaB}</strong></td>
+                  <td>${a.segnoB}</td>
+                  <td>${a.orb}°</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          
+          <div class="footer">
+            <p>Astrovia - Il tuo cielo, le tue stelle ✨ | Calcolato con Swiss Ephemeris</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+    
+    const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+    const page = await browser.newPage();
+    await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+    
+    const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true, margin: { top: '15mm', bottom: '15mm', left: '15mm', right: '15mm' } });
+    await browser.close();
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=compatibilita-${personaA.data}_${personaB.data}.pdf`);
+    res.send(pdfBuffer);
+    
+  } catch (err) {
+    console.error('❌ ERRORE PDF COMPATIBILITÀ:', err.message);
+    res.status(500).json({ errore: err.message || 'Errore generazione PDF' });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Server su porta ${PORT}`));
