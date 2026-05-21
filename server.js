@@ -222,6 +222,27 @@ function calcolaFaseLunare(jdUt) {
 }
 
 // =======================
+// 🕒 FUNZIONE PER L'ORA LEGALE ITALIANA (DST)
+// =======================
+function isItalianDST(year, month, day) {
+  // L'ora legale in Italia inizia l'ultima domenica di marzo e termina l'ultima domenica di ottobre
+  if (month < 3 || month > 10) return false;
+  if (month > 3 && month < 10) return true;
+  
+  if (month === 3) {
+    const lastSunday = new Date(year, 3, 0).getDate();
+    return day >= lastSunday;
+  }
+  
+  if (month === 10) {
+    const lastSunday = new Date(year, 11, 0).getDate();
+    return day < lastSunday;
+  }
+  
+  return false;
+}
+
+// =======================
 // 🌟 API - TEMA NATALE
 // =======================
 app.post('/tema-natale', (req, res) => {
@@ -238,7 +259,10 @@ app.post('/tema-natale', (req, res) => {
     const [y, m, d] = data.split('-').map(Number);
     let [h, min] = ora.split(':').map(Number);
     
-    let oraUt = h + min / 60 - 1;
+    // Calcolo dell'offset con ora legale
+    const dst = isItalianDST(y, m, d);
+    const offset = dst ? 2 : 1;
+    let oraUt = h + min / 60 - offset;
     let giornoJD = d;
     let meseJD = m;
     let annoJD = y;
@@ -351,7 +375,10 @@ app.post('/ascendente', (req, res) => {
     const [y, m, d] = data.split('-').map(Number);
     let [h, min] = ora.split(':').map(Number);
     
-    let oraUt = h + min / 60 - 1;
+    // Calcolo dell'offset con ora legale
+    const dst = isItalianDST(y, m, d);
+    const offset = dst ? 2 : 1;
+    let oraUt = h + min / 60 - offset;
     let giornoJD = d;
     let meseJD = m;
     let annoJD = y;
@@ -416,7 +443,10 @@ app.post('/previsioni', (req, res) => {
     const [y, m, d] = data.split('-').map(Number);
     let [h, min] = ora.split(':').map(Number);
     
-    let oraUt = h + min / 60 - 1;
+    // Calcolo dell'offset con ora legale
+    const dst = isItalianDST(y, m, d);
+    const offset = dst ? 2 : 1;
+    let oraUt = h + min / 60 - offset;
     let giornoJD = d;
     let meseJD = m;
     let annoJD = y;
@@ -595,7 +625,10 @@ app.post('/transiti', (req, res) => {
     const [y, m, d] = data.split('-').map(Number);
     let [h, min] = ora.split(':').map(Number);
     
-    let oraUt = h + min / 60 - 1;
+    // Calcolo dell'offset con ora legale
+    const dst = isItalianDST(y, m, d);
+    const offset = dst ? 2 : 1;
+    let oraUt = h + min / 60 - offset;
     let giornoJD = d;
     let meseJD = m;
     let annoJD = y;
@@ -766,7 +799,10 @@ app.post('/compatibilita', (req, res) => {
       const [y, m, d] = data.split('-').map(Number);
       let [h, min] = ora.split(':').map(Number);
       
-      let oraUt = h + min / 60 - 1;
+      // Calcolo dell'offset con ora legale
+      const dst = isItalianDST(y, m, d);
+      const offset = dst ? 2 : 1;
+      let oraUt = h + min / 60 - offset;
       let giornoJD = d;
       let meseJD = m;
       let annoJD = y;
