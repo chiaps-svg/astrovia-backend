@@ -130,11 +130,16 @@ function planet(id, jd) {
 
     if (!res) return null;
 
-    if (Array.isArray(res)) return res[0];
-    if (typeof res === 'number') return res;
-    if (typeof res.longitude === 'number') return res.longitude;
+    let lon = null;
 
-    return null;
+    if (Array.isArray(res)) lon = res[0];
+    else if (typeof res === 'number') lon = res;
+    else if (typeof res.longitude === 'number') lon = res.longitude;
+
+    if (lon === null || !isFinite(lon)) return null;
+
+    return lon;
+
   } catch {
     return null;
   }
@@ -144,18 +149,25 @@ function planet(id, jd) {
 // 🏠 HOUSES ENGINE
 // =======================
 function houses(jd, lat, lon) {
-  const res = swisseph.swe_houses(jd, lat, lon, CONFIG.houseSystem);
+  try {
+    const res = swisseph.swe_houses(jd, lat, lon, CONFIG.houseSystem);
 
-  const cusps = res?.house || res?.cusps || [];
-  const ascmc = res?.ascmc || [];
+    if (!res) return { asc: null, mc: null, dc: null, ic: null, cusps: [] };
 
-  return {
-    asc: wrap(ascmc[0]),
-    mc: wrap(ascmc[1]),
-    dc: wrap((ascmc[0] + 180) % 360),
-    ic: wrap((ascmc[1] + 180) % 360),
-    cusps
-  };
+    const cusps = res.house || res.cusps || [];
+    const ascmc = res.ascmc || [];
+
+    return {
+      asc: wrap(ascmc?.[0]),
+      mc: wrap(ascmc?.[1]),
+      dc: wrap((ascmc?.[0] + 180) % 360),
+      ic: wrap((ascmc?.[1] + 180) % 360),
+      cusps
+    };
+
+  } catch (e) {
+    return { asc: null, mc: null, dc: null, ic: null, cusps: [] };
+  }
 }
 
 // =======================
@@ -193,11 +205,17 @@ function checkAspects(p1, p2) {
 
   for (const [k1, v1] of Object.entries(p1)) {
     for (const [k2, v2] of Object.entries(p2)) {
-      if (v1 == null || v2 == null) continue;
+
+      if (!isFinite(v1) || !isFinite(v2)) continue;
 
       const hits = aspects(v1, v2);
+
       for (const h of hits) {
-        out.push({ p1: k1, p2: k2, ...h });
+        out.push({
+          p1: k1,
+          p2: k2,
+          ...h
+        });
       }
     }
   }
