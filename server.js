@@ -98,6 +98,8 @@ function calcolaAspetti(pianeti) {
       const long1 = p1Data.longitudine;
       const long2 = p2Data.longitudine;
       
+      if (long1 === undefined || long1 === null || long2 === undefined || long2 === null) continue;
+      
       let diff = Math.abs(long1 - long2);
       if (diff > 180) diff = 360 - diff;
       
@@ -125,12 +127,14 @@ function calcolaAspetti(pianeti) {
 // =======================
 function calcPlanet(id, nome, jdUt) {
   try {
-    if (!id && id !== 0) return null;
+    if (id === undefined || id === null) return null;
+    if (jdUt === undefined || jdUt === null) return null;
     
     let deltaT = swisseph.swe_deltat(jdUt);
     if (typeof deltaT === 'object' && deltaT !== null) {
         deltaT = deltaT.delta_t || deltaT.deltat || 0;
     }
+    if (typeof deltaT !== 'number' || isNaN(deltaT)) deltaT = 0;
     
     const jdTT = jdUt + deltaT;
     const result = swisseph.swe_calc(jdTT, id, swisseph.SEFLG_SWIEPH | swisseph.SEFLG_SPEED);
@@ -138,17 +142,18 @@ function calcPlanet(id, nome, jdUt) {
     if (!result) return null;
     
     let longitudine = null;
-    if (typeof result.longitude === 'number') {
+    if (typeof result.longitude === 'number' && !isNaN(result.longitude)) {
       longitudine = result.longitude;
-    } else if (typeof result === 'number') {
+    } else if (typeof result === 'number' && !isNaN(result)) {
       longitudine = result;
-    } else if (Array.isArray(result) && result.length > 0) {
+    } else if (Array.isArray(result) && result.length > 0 && typeof result[0] === 'number' && !isNaN(result[0])) {
       longitudine = result[0];
     }
     
     return longitudine;
     
   } catch (e) {
+    console.error(`❌ Errore calcPlanet per ${nome}:`, e.message);
     return null;
   }
 }
@@ -157,9 +162,14 @@ function calcPlanet(id, nome, jdUt) {
 // 📍 FUNZIONE PER CALCOLARE L'ASCENDENTE
 // =======================
 function calcolaAscendente(jdUt, latNum, lonNum) {
-  const houses = swisseph.swe_houses(jdUt, latNum, lonNum, 'P');
-  const ascendenteLong = houses.ascmc ? houses.ascmc[0] : houses.house[0];
-  return ascendenteLong;
+  try {
+    const houses = swisseph.swe_houses(jdUt, latNum, lonNum, 'P');
+    const ascendenteLong = houses.ascmc ? houses.ascmc[0] : houses.house[0];
+    return ascendenteLong;
+  } catch(e) {
+    console.error('❌ Errore calcolo ascendente:', e.message);
+    return 0;
+  }
 }
 
 // =======================
@@ -225,7 +235,6 @@ function calcolaFaseLunare(jdUt) {
 // 🕒 FUNZIONE PER L'ORA LEGALE ITALIANA (DST)
 // =======================
 function isItalianDST(year, month, day) {
-  // L'ora legale in Italia inizia l'ultima domenica di marzo e termina l'ultima domenica di ottobre
   if (month < 3 || month > 10) return false;
   if (month > 3 && month < 10) return true;
   
@@ -259,7 +268,6 @@ app.post('/tema-natale', (req, res) => {
     const [y, m, d] = data.split('-').map(Number);
     let [h, min] = ora.split(':').map(Number);
     
-    // Calcolo dell'offset con ora legale
     const dst = isItalianDST(y, m, d);
     const offset = dst ? 2 : 1;
     let oraUt = h + min / 60 - offset;
@@ -292,7 +300,7 @@ app.post('/tema-natale', (req, res) => {
     const segni = ['Ariete ♈', 'Toro ♉', 'Gemelli ♊', 'Cancro ♋', 'Leone ♌', 'Vergine ♍', 'Bilancia ♎', 'Scorpione ♏', 'Sagittario ♐', 'Capricorno ♑', 'Acquario ♒', 'Pesci ♓'];
     
     function getSegnoGrado(long) {
-      if (long === undefined || long === null) return null;
+      if (long === undefined || long === null || isNaN(long)) return null;
       const indiceSegno = Math.floor(long / 30);
       const grado = (long % 30).toFixed(2);
       return {
@@ -375,7 +383,6 @@ app.post('/ascendente', (req, res) => {
     const [y, m, d] = data.split('-').map(Number);
     let [h, min] = ora.split(':').map(Number);
     
-    // Calcolo dell'offset con ora legale
     const dst = isItalianDST(y, m, d);
     const offset = dst ? 2 : 1;
     let oraUt = h + min / 60 - offset;
@@ -443,7 +450,6 @@ app.post('/previsioni', (req, res) => {
     const [y, m, d] = data.split('-').map(Number);
     let [h, min] = ora.split(':').map(Number);
     
-    // Calcolo dell'offset con ora legale
     const dst = isItalianDST(y, m, d);
     const offset = dst ? 2 : 1;
     let oraUt = h + min / 60 - offset;
@@ -625,7 +631,6 @@ app.post('/transiti', (req, res) => {
     const [y, m, d] = data.split('-').map(Number);
     let [h, min] = ora.split(':').map(Number);
     
-    // Calcolo dell'offset con ora legale
     const dst = isItalianDST(y, m, d);
     const offset = dst ? 2 : 1;
     let oraUt = h + min / 60 - offset;
@@ -780,7 +785,7 @@ app.post('/transiti', (req, res) => {
 });
 
 // =======================
-// 💞 API - COMPATIBILITÀ
+// 💞 API - COMPATIBILITÀ (CORRETTA)
 // =======================
 app.post('/compatibilita', (req, res) => {
   console.log('\n🔥 RICHIESTA COMPATIBILITÀ');
@@ -794,12 +799,16 @@ app.post('/compatibilita', (req, res) => {
       return res.status(400).json({ errore: 'Parametri mancanti' });
     }
 
+    if (!personaA.data || !personaA.ora || !personaA.lat || !personaA.lon ||
+        !personaB.data || !personaB.ora || !personaB.lat || !personaB.lon) {
+      return res.status(400).json({ errore: 'Dati persona incompleti' });
+    }
+
     // Funzione per calcolare i pianeti di una persona
     function calcolaPianetiPersona(data, ora, lat, lon) {
       const [y, m, d] = data.split('-').map(Number);
       let [h, min] = ora.split(':').map(Number);
       
-      // Calcolo dell'offset con ora legale
       const dst = isItalianDST(y, m, d);
       const offset = dst ? 2 : 1;
       let oraUt = h + min / 60 - offset;
@@ -845,7 +854,7 @@ app.post('/compatibilita', (req, res) => {
         plutone: calcPlanet(swisseph.SE_PLUTO, 'Plutone', jdUt)
       };
       
-      return { pianeti, ascendenteLong };
+      return { pianeti, ascendenteLong, jdUt };
     }
     
     // Calcola i pianeti per entrambe le persone
@@ -855,13 +864,28 @@ app.post('/compatibilita', (req, res) => {
     const pianetiA = personaAData.pianeti;
     const pianetiB = personaBData.pianeti;
     
+    // Controlla quanti pianeti validi sono stati calcolati
+    const pianetiAValid = Object.values(pianetiA).filter(v => v !== null && !isNaN(v)).length;
+    const pianetiBValid = Object.values(pianetiB).filter(v => v !== null && !isNaN(v)).length;
+    
+    console.log(`📊 Pianeti validi A: ${pianetiAValid}/10`);
+    console.log(`📊 Pianeti validi B: ${pianetiBValid}/10`);
+    
+    // Se non ci sono abbastanza pianeti validi, restituisci un errore
+    if (pianetiAValid < 5 || pianetiBValid < 5) {
+      console.log('⚠️ Troppi pianeti non calcolati, compatibilità non disponibile');
+      return res.status(500).json({ 
+        errore: 'Impossibile calcolare la compatibilità: dati astrologici non disponibili. Verifica il percorso delle efemeridi.' 
+      });
+    }
+    
     // Calcola aspetti tra i pianeti delle due persone
     const segni = ['Ariete', 'Toro', 'Gemelli', 'Cancro', 'Leone', 'Vergine', 'Bilancia', 'Scorpione', 'Sagittario', 'Capricorno', 'Acquario', 'Pesci'];
     const aspettiCompatibilita = [];
     
     for (const [nomeA, longA] of Object.entries(pianetiA)) {
       for (const [nomeB, longB] of Object.entries(pianetiB)) {
-        if (longA === null || longB === null) continue;
+        if (longA === null || longB === null || isNaN(longA) || isNaN(longB)) continue;
         
         let diff = Math.abs(longA - longB);
         if (diff > 180) diff = 360 - diff;
@@ -919,18 +943,47 @@ app.post('/compatibilita', (req, res) => {
     // Ordina per orb (più stretto prima)
     aspettiCompatibilita.sort((a, b) => parseFloat(a.orb) - parseFloat(b.orb));
     
-    // Calcolo punteggio semplice
-    let punteggio = 0;
-    for (const a of aspettiCompatibilita) {
-      if (a.aspetto === 'Trigono' || a.aspetto === 'Sestile') punteggio += 10;
-      if (a.aspetto === 'Congiunzione') punteggio += 5;
-      if (a.aspetto === 'Opposizione') punteggio += 3;
-      if (a.aspetto === 'Quadrato') punteggio += 2;
-      punteggio += Math.max(0, 8 - parseFloat(a.orb));
+    // ========== CALCOLO PUNTEGGIO CORRETTO ==========
+    let punteggio = 50; // Base neutra
+    
+    if (aspettiCompatibilita.length > 0) {
+      punteggio = 0;
+      let pesoMassimo = 0;
+      
+      for (const a of aspettiCompatibilita) {
+        let pesoSingolo = 0;
+        
+        // Peso base per tipo di aspetto
+        if (a.aspetto === 'Trigono' || a.aspetto === 'Sestile') {
+          pesoSingolo += 20;
+        } else if (a.aspetto === 'Congiunzione') {
+          pesoSingolo += 10;
+        } else if (a.aspetto === 'Opposizione') {
+          pesoSingolo += 8;
+        } else if (a.aspetto === 'Quadrato') {
+          pesoSingolo += 5;
+        }
+        
+        // Bonus per orb stretta (più stretto = meglio)
+        const orbNum = parseFloat(a.orb);
+        if (!isNaN(orbNum)) {
+          const bonusOrb = Math.max(0, 8 - orbNum) * 1.5;
+          pesoSingolo += bonusOrb;
+        }
+        
+        punteggio += pesoSingolo;
+        pesoMassimo += 25; // Massimo teorico per aspetto
+      }
+      
+      // Normalizza su 100
+      punteggio = Math.min(100, Math.round((punteggio / pesoMassimo) * 100));
+      
+      // Assicurati che sia un numero valido
+      if (isNaN(punteggio) || punteggio < 0) punteggio = 50;
     }
-      console.log('PUNTEGGIO GREZZO:', punteggio);
-      console.log('ASPETTI TROVATI:', aspettiCompatibilita.length);
-      punteggio = Math.min(100, Math.round(punteggio));
+    
+    console.log('📊 ASPETTI TROVATI:', aspettiCompatibilita.length);
+    console.log('📊 PUNTEGGIO FINALE:', punteggio);
     
     // Riepilogo
     let riepilogo = '';
@@ -949,8 +1002,6 @@ app.post('/compatibilita', (req, res) => {
     const ascendenteAGrado = (personaAData.ascendenteLong % 30).toFixed(2);
     const ascendenteBSegno = segni[Math.floor(personaBData.ascendenteLong / 30)];
     const ascendenteBGrado = (personaBData.ascendenteLong % 30).toFixed(2);
-    
-    console.log(`🔗 Trovati ${aspettiCompatibilita.length} aspetti di compatibilità`);
     
     res.json({
       aspetti: aspettiCompatibilita.slice(0, 20),
@@ -980,22 +1031,18 @@ app.post('/calendario-mese', (req, res) => {
       return res.status(400).json({ errore: 'Parametri anno e mese validi richiesti' });
     }
     
-    // Primo giorno del mese
     const primoGiorno = new Date(anno, mese - 1, 1);
     const ultimoGiorno = new Date(anno, mese, 0);
     const giorniNelMese = ultimoGiorno.getDate();
     
     const giorni = [];
     
-    // Per ogni giorno del mese
     for (let giorno = 1; giorno <= giorniNelMese; giorno++) {
       const data = `${anno}-${String(mese).padStart(2, '0')}-${String(giorno).padStart(2, '0')}`;
       const jdUt = swisseph.swe_julday(anno, mese, giorno, 12, swisseph.SE_GREG_CAL);
       
-      // Fase lunare
       const faseLunare = calcolaFaseLunare(jdUt);
       
-      // Aspetti del giorno (tra pianeti in transito)
       const pianetiDelGiorno = {
         sole: calcPlanet(swisseph.SE_SUN, 'Sole', jdUt),
         luna: calcPlanet(swisseph.SE_MOON, 'Luna', jdUt),
@@ -1009,11 +1056,10 @@ app.post('/calendario-mese', (req, res) => {
         plutone: calcPlanet(swisseph.SE_PLUTO, 'Plutone', jdUt)
       };
       
-      // Converti in formato con segno e grado per calcolo aspetti
       const segni = ['Ariete', 'Toro', 'Gemelli', 'Cancro', 'Leone', 'Vergine', 'Bilancia', 'Scorpione', 'Sagittario', 'Capricorno', 'Acquario', 'Pesci'];
       const pianetiConSegno = {};
       for (const [nome, long] of Object.entries(pianetiDelGiorno)) {
-        if (long !== null) {
+        if (long !== null && !isNaN(long)) {
           pianetiConSegno[nome] = {
             longitudine: long,
             segno: segni[Math.floor(long / 30)],
@@ -1023,12 +1069,10 @@ app.post('/calendario-mese', (req, res) => {
       }
       
       const aspettiGiorno = calcolaAspetti(pianetiConSegno);
-      const aspettiImportanti = aspettiGiorno.slice(0, 5); // Limita a 5 aspetti per giorno
+      const aspettiImportanti = aspettiGiorno.slice(0, 5);
       
-      // Eventi planetari (ingressi in segno - rilevanti quando cambia segno)
       const eventi = [];
       
-      // Controlla se oggi c'è un cambio di segno per qualche pianeta
       if (giorno > 1) {
         const jdUtIeri = swisseph.swe_julday(anno, mese, giorno - 1, 12, swisseph.SE_GREG_CAL);
         const segnoIeri = {};
@@ -1039,7 +1083,7 @@ app.post('/calendario-mese', (req, res) => {
           plutone: swisseph.SE_PLUTO
         })) {
           const longIeri = calcPlanet(id, nome, jdUtIeri);
-          if (longIeri !== null) segnoIeri[nome] = Math.floor(longIeri / 30);
+          if (longIeri !== null && !isNaN(longIeri)) segnoIeri[nome] = Math.floor(longIeri / 30);
         }
         
         for (const [nome, id] of Object.entries({
@@ -1049,7 +1093,7 @@ app.post('/calendario-mese', (req, res) => {
           plutone: swisseph.SE_PLUTO
         })) {
           const longOggi = pianetiDelGiorno[nome];
-          if (longOggi !== null) {
+          if (longOggi !== null && !isNaN(longOggi)) {
             const segnoOggi = Math.floor(longOggi / 30);
             if (segnoIeri[nome] !== undefined && segnoIeri[nome] !== segnoOggi) {
               eventi.push(`${nome.charAt(0).toUpperCase() + nome.slice(1)} entra in ${segni[segnoOggi]}`);
