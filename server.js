@@ -36,6 +36,23 @@ try {
   ];
 }
 
+// Importa le frasi di riepilogo per la compatibilità
+let getRiepilogoByScore;
+try {
+  const riepilogoModule = require('./data/frasi-riepilogo');
+  getRiepilogoByScore = riepilogoModule.getRiepilogoByScore;
+  console.log('✅ File frasi-riepilogo.js caricato');
+} catch(e) {
+  console.log('⚠️ File frasi-riepilogo.js non trovato, uso riepilogo di default');
+  // Fallback per il riepilogo
+  getRiepilogoByScore = (punteggio) => {
+    if (punteggio >= 70) return "🌟 Compatibilità eccellente!";
+    if (punteggio >= 50) return "💫 Buona compatibilità.";
+    if (punteggio >= 30) return "🌙 Compatibilità nella media.";
+    return "🌊 Compatibilità complessa.";
+  };
+}
+
 // Array per tenere traccia delle frasi usate nella compatibilità (evita ripetizioni)
 let frasiCompatibilitaUsate = [];
 
@@ -805,7 +822,7 @@ app.post('/transiti', (req, res) => {
 });
 
 // =======================
-// 💞 API - COMPATIBILITÀ (CON ANTI-RIPETIZIONE)
+// 💞 API - COMPATIBILITÀ (CON ANTI-RIPETIZIONE E RIEPILOGO VARIATO)
 // =======================
 app.post('/compatibilita', (req, res) => {
   console.log('\n🔥 RICHIESTA COMPATIBILITÀ');
@@ -985,7 +1002,7 @@ app.post('/compatibilita', (req, res) => {
     let punteggio = 50; // Base neutra
     
     if (aspettiCompatibilita.length > 0) {
-      punteggio = 0;
+      let punteggioGreggio = 0;
       let pesoMassimo = 0;
       
       for (const a of aspettiCompatibilita) {
@@ -1009,12 +1026,12 @@ app.post('/compatibilita', (req, res) => {
           pesoSingolo += bonusOrb;
         }
         
-        punteggio += pesoSingolo;
+        punteggioGreggio += pesoSingolo;
         pesoMassimo += 25; // Massimo teorico per aspetto
       }
       
       // Normalizza su 100
-      punteggio = Math.min(100, Math.round((punteggio / pesoMassimo) * 100));
+      punteggio = Math.min(100, Math.round((punteggioGreggio / pesoMassimo) * 100));
       
       // Assicurati che sia un numero valido
       if (isNaN(punteggio) || punteggio < 0) punteggio = 50;
@@ -1023,17 +1040,8 @@ app.post('/compatibilita', (req, res) => {
     console.log('📊 ASPETTI TROVATI:', aspettiCompatibilita.length);
     console.log('📊 PUNTEGGIO FINALE:', punteggio);
     
-    // Riepilogo
-    let riepilogo = '';
-    if (punteggio >= 70) {
-      riepilogo = '🌟 Compatibilità eccellente! C\'è una forte armonia naturale tra di voi. I pianeti danzano insieme, favorendo comprensione e sostegno reciproco.';
-    } else if (punteggio >= 50) {
-      riepilogo = '💫 Buona compatibilità. Ci sono molti aspetti armonici, ma anche qualche tensione costruttiva che può aiutarvi a crescere insieme.';
-    } else if (punteggio >= 30) {
-      riepilogo = '🌙 Compatibilità nella media. Il vostro rapporto richiede impegno e comunicazione, ma le potenzialità ci sono.';
-    } else {
-      riepilogo = '🌊 Compatibilità complessa. Molti aspetti di tensione: il vostro è un rapporto che può essere stimolante ma anche impegnativo.';
-    }
+    // Riepilogo con frasi variabili dal file esterno
+    const riepilogo = getRiepilogoByScore(punteggio);
     
     // Aggiungi anche l'Ascendente di ciascuno per info extra
     const ascendenteASegno = segni[Math.floor(personaAData.ascendenteLong / 30)];
