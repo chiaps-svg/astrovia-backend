@@ -928,7 +928,9 @@ app.post('/compatibilita', (req, res) => {
       if (a.aspetto === 'Quadrato') punteggio += 2;
       punteggio += Math.max(0, 8 - parseFloat(a.orb));
     }
-    punteggio = Math.min(100, Math.round(punteggio));
+      console.log('PUNTEGGIO GREZZO:', punteggio);
+      console.log('ASPETTI TROVATI:', aspettiCompatibilita.length);
+      punteggio = Math.min(100, Math.round(punteggio));
     
     // Riepilogo
     let riepilogo = '';
