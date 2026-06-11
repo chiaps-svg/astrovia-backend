@@ -53,8 +53,24 @@ try {
   };
 }
 
+// Importa le frasi per i transiti
+let frasiTransiti, frasiTransitiGeneriche;
+try {
+  const transitiModule = require('./data/frasi-transiti');
+  frasiTransiti = transitiModule.frasiTransiti;
+  frasiTransitiGeneriche = transitiModule.frasiTransitiGeneriche;
+  console.log('✅ File frasi-transiti.js caricato');
+} catch(e) {
+  console.log('⚠️ File frasi-transiti.js non trovato, uso frasi di default');
+  frasiTransiti = {};
+  frasiTransitiGeneriche = ["Questo transito porta un'energia significativa. Osserva i segnali."];
+}
+
 // Array per tenere traccia delle frasi usate nella compatibilità (evita ripetizioni)
 let frasiCompatibilitaUsate = [];
+
+// Array per tenere traccia delle frasi usate nei transiti (evita ripetizioni)
+let frasiTransitiUsate = [];
 
 console.log('🔍 DIRECTORY CORRENTE:', __dirname);
 console.log('🔍 La cartella ./ephe esiste?', fs.existsSync('./ephe'));
@@ -236,6 +252,32 @@ function generaTestoAspetto(aspetto, pianetaNatale, segnoNatale, pianetaTransito
     .replace(/{pianetaTransito}/g, pianetaTransito.charAt(0).toUpperCase() + pianetaTransito.slice(1))
     .replace(/{segnoTransito}/g, segnoTransito)
     .replace(/{aspetto}/g, aspetto.toLowerCase());
+}
+
+// =======================
+// 🔮 FUNZIONE PER GENERARE TESTO TRANSITO (SENZA RIPETIZIONI)
+// =======================
+function getFraseTransito(aspetto, pianetaNatale, pianetaTransito) {
+  let listaFrasi = frasiTransiti[aspetto] || [];
+  
+  if (listaFrasi.length === 0) {
+    listaFrasi = frasiTransitiGeneriche;
+  }
+  
+  let frasiDisponibili = listaFrasi.filter(f => !frasiTransitiUsate.includes(f));
+  
+  if (frasiDisponibili.length === 0) {
+    frasiDisponibili = [...listaFrasi];
+    frasiTransitiUsate = [];
+  }
+  
+  const frase = frasiDisponibili[Math.floor(Math.random() * frasiDisponibili.length)];
+  frasiTransitiUsate.push(frase);
+  
+  // Sostituisci i placeholder se presenti
+  return frase
+    .replace(/{pianetaNatale}/g, pianetaNatale.charAt(0).toUpperCase() + pianetaNatale.slice(1))
+    .replace(/{pianetaTransito}/g, pianetaTransito.charAt(0).toUpperCase() + pianetaTransito.slice(1));
 }
 
 // =======================
@@ -792,21 +834,13 @@ app.post('/transiti', (req, res) => {
     
     aspettiTransito.sort((a, b) => parseFloat(a.orb) - parseFloat(b.orb));
     
-    const aspettiFinali = aspettiTransito.slice(0, 15).map(a => {
-      let descrizione = '';
-      if (a.aspetto === 'Congiunzione') {
-        descrizione = `${a.pianetaNatale} e ${a.pianetaTransito} si uniscono, amplificando le rispettive energie. Momento di concentrazione e intensità.`;
-      } else if (a.aspetto === 'Sestile') {
-        descrizione = `Opportunità di collaborazione tra ${a.pianetaNatale} e ${a.pianetaTransito}. Un'occasione da non perdere.`;
-      } else if (a.aspetto === 'Quadrato') {
-        descrizione = `Tensione costruttiva. ${a.pianetaNatale} e ${a.pianetaTransito} creano attrito che può diventare motore di cambiamento.`;
-      } else if (a.aspetto === 'Trigono') {
-        descrizione = `Armonia e fluidità. ${a.pianetaNatale} e ${a.pianetaTransito} lavorano insieme senza sforzo.`;
-      } else if (a.aspetto === 'Opposizione') {
-        descrizione = `Bisogno di equilibrio. ${a.pianetaNatale} e ${a.pianetaTransito} richiedono una sintesi tra poli opposti.`;
-      }
-      return { ...a, descrizione };
-    });
+    // Resetta le frasi usate per ogni richiesta di transiti
+frasiTransitiUsate = [];
+
+const aspettiFinali = aspettiTransito.slice(0, 15).map(a => {
+  const descrizione = getFraseTransito(a.aspetto, a.pianetaNatale, a.pianetaTransito);
+  return { ...a, descrizione };
+});
     
     console.log(`🔗 Trovati ${aspettiTransito.length} aspetti di transito`);
     
