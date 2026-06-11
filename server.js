@@ -19,6 +19,26 @@ try {
   consigliNeutri = ["⚖️ Giornata equilibrata."];
 }
 
+// Importa le frasi per la compatibilità
+let frasiCompatibilita, frasiCompatibilitaGeneriche;
+try {
+  const compatModule = require('./data/frasi-compatibilita');
+  frasiCompatibilita = compatModule.frasiCompatibilita;
+  frasiCompatibilitaGeneriche = compatModule.frasiCompatibilitaGeneriche;
+  console.log('✅ File frasi-compatibilita.js caricato');
+} catch(e) {
+  console.log('⚠️ File frasi-compatibilita.js non trovato, uso frasi di default');
+  frasiCompatibilita = {};
+  frasiCompatibilitaGeneriche = [
+    "La vostra connessione è unica e speciale, come ogni rapporto umano.",
+    "Le stelle osservano il vostro legame con curiosità. Sta a voi scrivere la storia.",
+    "Non ci sono aspetti planetari forti, ma a volte l'amore più puro non ha bisogno di conferme celesti."
+  ];
+}
+
+// Array per tenere traccia delle frasi usate nella compatibilità (evita ripetizioni)
+let frasiCompatibilitaUsate = [];
+
 console.log('🔍 DIRECTORY CORRENTE:', __dirname);
 console.log('🔍 La cartella ./ephe esiste?', fs.existsSync('./ephe'));
 
@@ -785,10 +805,13 @@ app.post('/transiti', (req, res) => {
 });
 
 // =======================
-// 💞 API - COMPATIBILITÀ (CORRETTA)
+// 💞 API - COMPATIBILITÀ (CON ANTI-RIPETIZIONE)
 // =======================
 app.post('/compatibilita', (req, res) => {
   console.log('\n🔥 RICHIESTA COMPATIBILITÀ');
+  
+  // Resetta l'array delle frasi usate per ogni nuova richiesta
+  frasiCompatibilitaUsate = [];
   
   try {
     const { personaA, personaB } = req.body;
@@ -802,6 +825,31 @@ app.post('/compatibilita', (req, res) => {
     if (!personaA.data || !personaA.ora || !personaA.lat || !personaA.lon ||
         !personaB.data || !personaB.ora || !personaB.lat || !personaB.lon) {
       return res.status(400).json({ errore: 'Dati persona incompleti' });
+    }
+
+    // Funzione per estrarre una frase senza ripetizioni
+    function getFraseCompatibilita(aspetto) {
+      let listaFrasi = frasiCompatibilita[aspetto] || [];
+      
+      // Se non ci sono frasi per questo aspetto, usa quelle generiche
+      if (listaFrasi.length === 0) {
+        listaFrasi = frasiCompatibilitaGeneriche;
+      }
+      
+      // Filtra le frasi già usate
+      let frasiDisponibili = listaFrasi.filter(f => !frasiCompatibilitaUsate.includes(f));
+      
+      // Se tutte le frasi sono state usate, resetta l'array
+      if (frasiDisponibili.length === 0) {
+        frasiDisponibili = [...listaFrasi];
+        frasiCompatibilitaUsate = [];
+      }
+      
+      // Scegli una frase casuale
+      const frase = frasiDisponibili[Math.floor(Math.random() * frasiDisponibili.length)];
+      frasiCompatibilitaUsate.push(frase);
+      
+      return frase;
     }
 
     // Funzione per calcolare i pianeti di una persona
@@ -914,18 +962,8 @@ app.post('/compatibilita', (req, res) => {
           const segnoA = segni[Math.floor(longA / 30)];
           const segnoB = segni[Math.floor(longB / 30)];
           
-          let descrizione = '';
-          if (aspetto === 'Congiunzione') {
-            descrizione = `${nomeA} e ${nomeB} si uniscono, creando una forte connessione energetica.`;
-          } else if (aspetto === 'Sestile') {
-            descrizione = `Opportunità di collaborazione e supporto reciproco.`;
-          } else if (aspetto === 'Quadrato') {
-            descrizione = `Tensione costruttiva: le differenze possono diventare un motore di crescita.`;
-          } else if (aspetto === 'Trigono') {
-            descrizione = `Armonia naturale: i vostri pianeti danzano insieme senza sforzo.`;
-          } else if (aspetto === 'Opposizione') {
-            descrizione = `Attrazione degli opposti: potete completarvi a vicenda.`;
-          }
+          // Usa la funzione anti-ripetizione per la descrizione
+          const descrizione = getFraseCompatibilita(aspetto);
           
           aspettiCompatibilita.push({
             pianetaA: nomeA,
